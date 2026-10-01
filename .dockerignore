@@ -1,0 +1,14 @@
+node_modules
+dist
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov
+.git
+test-results
+playwright-report
+.spec
+.agents
+prototype
