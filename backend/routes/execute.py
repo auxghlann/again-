@@ -42,16 +42,17 @@ def execute_sql(
         expected_rows=expected_rows,
     )
 
-    # Record submission attempt automatically
-    record_submission(
-        db=db,
-        problem_id=payload.problem_id,
-        language="SQL",
-        status=result["status"],
-        runtime_ms=result["runtime_ms"],
-        submitted_code=payload.user_sql,
-    )
-    db.commit()
+    # Record submission attempt only if is_submission is requested
+    if payload.is_submission:
+        record_submission(
+            db=db,
+            problem_id=payload.problem_id,
+            language="SQL",
+            status=result["status"],
+            runtime_ms=result["runtime_ms"],
+            submitted_code=payload.user_sql,
+        )
+        db.commit()
 
     return SqlRunResponse(
         passed=result["passed"],
@@ -85,16 +86,17 @@ def execute_python(
         timeout_seconds=5.0,
     )
 
-    # Record submission attempt automatically
-    record_submission(
-        db=db,
-        problem_id=payload.problem_id,
-        language="Python",
-        status=result["status"],
-        runtime_ms=result["runtime_ms"],
-        submitted_code=payload.user_code,
-    )
-    db.commit()
+    # Record submission attempt only if is_submission is requested
+    if payload.is_submission:
+        record_submission(
+            db=db,
+            problem_id=payload.problem_id,
+            language="Python",
+            status=result["status"],
+            runtime_ms=result["runtime_ms"],
+            submitted_code=payload.user_code,
+        )
+        db.commit()
 
     return PythonRunResponse(
         passed=result["passed"],

@@ -115,10 +115,10 @@ def run_sql_sandbox(
                 status = "Accepted"
                 diff = None
         else:
-            # When no expected fixture exists, running without error counts as valid execution
-            passed = True
-            status = "Accepted"
-            diff = None
+            # When no expected fixture exists, running without error does not verify correctness
+            passed = False
+            status = "Executed (No Verification Fixture)"
+            diff = "No canonical solution or expected dataset provided to verify correctness."
 
         return {
             "passed": passed,

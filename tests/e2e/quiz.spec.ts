@@ -1,50 +1,51 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Practice Quiz Journey', () => {
-  test('navigates to catalog, starts quiz, answers questions, and views completion summary', async ({ page }) => {
-    // 1. Visit root home (Practice Catalog)
+test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
+  test('full user flow: sidebar navigation, topic filtering, answering questions, feedback reveal, and results summary', async ({ page }) => {
+    // 1. Visit root home and navigate via sidebar
     await page.goto('/');
+    const practiceNav = page.locator('aside a[data-nav="practice"]');
+    await expect(practiceNav).toBeVisible();
+    await practiceNav.click();
 
-    // Verify brand in sidebar
-    await expect(page.locator('.brand')).toContainText('again!');
+    // Verify URL and practice catalog
+    await expect(page).toHaveURL(/#\/practice/);
+    await expect(page.locator('.topbar')).toContainText('Practice');
 
-    // Verify practice library cards are rendered
-    const cards = page.locator('a.card');
-    await expect(cards.first()).toBeVisible();
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
+    // 2. Test domain filter chip interaction
+    const pythonChip = page.locator('.f-chips button', { hasText: 'Python' });
+    if (await pythonChip.isVisible()) {
+      await pythonChip.click();
+      await expect(pythonChip).toHaveClass(/\bon\b/);
+    }
 
-    // 2. Select Python Dictionary Comprehension card
-    const pyCard = page.locator('a.card[href="#/quiz/python-dictionary-comprehension"]');
-    await expect(pyCard).toBeVisible();
-    await pyCard.click();
+    // 3. Select a Practice topic card
+    const targetCard = page.locator('a.card[href="#/quiz/python-dictionary-comprehension"]');
+    await expect(targetCard).toBeVisible();
+    await targetCard.click();
 
     // Verify hash route changed to quiz
     await expect(page).toHaveURL(/#\/quiz\/python-dictionary-comprehension/);
 
-    // 3. Auto-wait for quiz card and question dots to render
-    await expect(page.locator('.qz-card')).toBeVisible();
+    // 4. Auto-wait for quiz question container and question dots
     const dots = page.locator('.qz-dots span');
     await expect(dots.first()).toBeVisible();
     const totalQuestions = await dots.count();
     expect(totalQuestions).toBeGreaterThan(0);
 
-    // 4. Answer questions iteratively
+    // 5. Answer each question through the lifecycle
     for (let i = 0; i < totalQuestions; i++) {
-      await expect(page.locator('.qz-card')).toBeVisible();
-
+      // Find available options: Multiple Choice, True/False, or Fill-in-the-Blank
       const mcqOptions = page.locator('.qz-opt');
       const tfOptions = page.locator('.qz-tf button');
+      const fibInput = page.locator('#fib-input');
 
       if ((await mcqOptions.count()) > 0) {
         await mcqOptions.first().click();
       } else if ((await tfOptions.count()) > 0) {
         await tfOptions.first().click();
-      } else {
-        const textInput = page.locator('#fib-input');
-        if (await textInput.isVisible()) {
-          await textInput.fill('test');
-        }
+      } else if (await fibInput.isVisible()) {
+        await fibInput.fill('comprehension');
       }
 
       // Click "Check answer"
@@ -52,24 +53,29 @@ test.describe('Practice Quiz Journey', () => {
       await expect(checkBtn).toBeEnabled();
       await checkBtn.click();
 
-      // Verify feedback banner and explanation are displayed
-      await expect(page.locator('.qz-fb')).toBeVisible();
+      // Verify feedback banner (.qz-fb) reveals authoritative technical explanation
+      const feedbackBanner = page.locator('.qz-fb');
+      await expect(feedbackBanner).toBeVisible();
+      const feedbackText = await feedbackBanner.innerText();
+      expect(feedbackText.length).toBeGreaterThan(5);
 
-      // Click "Next" or "Finish"
+      // Advance to next question or finish
       const nextBtn = page.locator('#quiz-next-btn');
       await expect(nextBtn).toBeVisible();
       await nextBtn.click();
     }
 
-    // 5. Verify completion summary card
-    await expect(page.locator('.qz-result')).toBeVisible();
-    await expect(page.locator('.qz-score')).toBeVisible();
-    await expect(page.locator('#quiz-retry-btn')).toBeVisible();
-    await expect(page.locator('#quiz-back-btn')).toBeVisible();
+    // 6. Verify Quiz Completion Summary Card
+    const resultCard = page.locator('.qz-result');
+    await expect(resultCard).toBeVisible();
+    await expect(resultCard.locator('.qz-score')).toBeVisible();
 
-    // Return to practice library
-    await page.locator('#quiz-back-btn').click();
-    await expect(page).toHaveURL(/#\/(?:practice)?$/);
-    await expect(page.locator('.brand')).toContainText('again!');
+    // 7. Verify "Back to Practice" navigation
+    const backToPracticeBtn = page.locator('#quiz-back-btn');
+    await expect(backToPracticeBtn).toBeVisible();
+    await backToPracticeBtn.click();
+
+    await expect(page).toHaveURL(/#\/practice/);
+    await expect(page.locator('.topbar')).toContainText('Practice');
   });
 });

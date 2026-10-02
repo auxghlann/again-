@@ -6,7 +6,7 @@ client = TestClient(app)
 
 
 def test_execute_python_accepted_and_records_submission():
-    """Verifies that a valid Two Sum solution passes all cases and logs a submission."""
+    """Verifies that a valid Two Sum solution passes all cases and logs submission only when is_submission is True."""
     prob_id = "python-basics:two-sum"
 
     # Clear prior submissions to ensure exact assertion
@@ -23,9 +23,25 @@ class Solution:
             seen[num] = i
         return []
 """
+    # 1. Scratchpad Run (is_submission=False) - executes but does NOT record a submission
+    run_res = client.post(
+        "/api/run/python",
+        json={"problem_id": prob_id, "user_code": correct_solution, "is_submission": False},
+    )
+    assert run_res.status_code == 200
+    run_data = run_res.json()
+    assert run_data["passed"] is True
+    assert run_data["status"] == "Accepted"
+
+    # Verify zero submissions recorded on run
+    subs_res0 = client.get(f"/api/problems/{prob_id}/submissions")
+    assert subs_res0.status_code == 200
+    assert len(subs_res0.json()) == 0
+
+    # 2. Official Submission (is_submission=True) - executes and records submission
     response = client.post(
         "/api/run/python",
-        json={"problem_id": prob_id, "user_code": correct_solution},
+        json={"problem_id": prob_id, "user_code": correct_solution, "is_submission": True},
     )
     assert response.status_code == 200
     data = response.json()
@@ -36,7 +52,7 @@ class Solution:
     assert data["total_count"] >= 3
     assert data["error"] is None
 
-    # Verify that a submission was automatically logged
+    # Verify that a submission was logged
     subs_res = client.get(f"/api/problems/{prob_id}/submissions")
     assert subs_res.status_code == 200
     subs = subs_res.json()

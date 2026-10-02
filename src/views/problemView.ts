@@ -15,6 +15,8 @@ import type {
   TestCaseItem,
 } from '../types';
 
+import { renderMarkdown } from '../utils/markdown';
+
 const SOLVED_STORAGE_KEY = 'again_solved_problems';
 
 function markProblemSolved(problemId: string): void {
@@ -26,6 +28,43 @@ function markProblemSolved(problemId: string): void {
   } catch {
     // ignore
   }
+}
+
+function formatTestCaseData(val: unknown): string {
+  if (val && typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    // Check if it's a table representation
+    if (Array.isArray(obj.columns)) {
+      const cols = obj.columns as string[];
+      const tableName = typeof obj.table === 'string' ? obj.table : null;
+      const rows = Array.isArray(obj.rows) ? (obj.rows as Record<string, unknown>[]) : null;
+
+      let tableHtml = `<div class="rounded-lg border border-brand-line overflow-hidden my-1 bg-brand-surface text-xs font-mono">`;
+      if (tableName) {
+        tableHtml += `<div class="px-2.5 py-1 bg-brand-surface2 border-b border-brand-line font-semibold text-[11px] text-brand-muted">Table: <span class="text-brand-text">${escapeHtml(tableName)}</span></div>`;
+      }
+      tableHtml += `<div class="overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="bg-brand-surface2/60 border-b border-brand-line text-brand-muted"><tr>`;
+      for (const col of cols) {
+        tableHtml += `<th class="px-2.5 py-1 font-semibold">${escapeHtml(col)}</th>`;
+      }
+      tableHtml += `</tr></thead>`;
+      if (rows && rows.length > 0) {
+        tableHtml += `<tbody class="divide-y divide-brand-line text-brand-text">`;
+        for (const row of rows) {
+          tableHtml += `<tr>`;
+          for (const col of cols) {
+            tableHtml += `<td class="px-2.5 py-1 whitespace-nowrap">${escapeHtml(String(row[col] ?? ''))}</td>`;
+          }
+          tableHtml += `</tr>`;
+        }
+        tableHtml += `</tbody>`;
+      }
+      tableHtml += `</table></div></div>`;
+      return tableHtml;
+    }
+    return `<input readonly class="w-full bg-brand-surface border border-brand-line rounded-lg px-3 py-1.5 text-xs font-mono text-brand-text outline-none" value="${escapeHtml(JSON.stringify(val))}">`;
+  }
+  return `<input readonly class="w-full bg-brand-surface border border-brand-line rounded-lg px-3 py-1.5 text-xs font-mono text-brand-text outline-none" value="${escapeHtml(String(val ?? ''))}">`;
 }
 
 export async function renderProblemView(container: HTMLElement, problemId: string): Promise<void> {
@@ -73,7 +112,6 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
 
   const isSql = problem.language.toLowerCase() === 'sql';
   const kind: 'sql' | 'py' = isSql ? 'sql' : 'py';
-  const fileExt = isSql ? 'sql' : 'py';
   const langLabel = isSql ? 'PostgreSQL' : 'Python 3';
 
   // Navigation back breadcrumb
@@ -82,221 +120,308 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   const backLabel = planId ? 'Study Plan' : 'Code Library';
 
   // UI state
-  let currentTab: 'desc' | 'subs' = 'desc';
+  type LeftTabType = 'desc' | 'subs';
+  type ConsoleTabType = 'testcase' | 'result';
+  let currentLeftTab: LeftTabType = 'desc';
+  let currentConsoleTab: ConsoleTabType = 'testcase';
+  const isLTab = (tab: LeftTabType): boolean => (currentLeftTab as string) === tab;
+  const isCTab = (tab: ConsoleTabType): boolean => (currentConsoleTab as string) === tab;
+  let hasRun = false;
   let activeCaseIdx = 0;
   let customInputActive = false;
   let customInputValue = '';
   const casesList: TestCaseItem[] = problem.testCases || problem.cases || [];
   const testResults: (boolean | null)[] = casesList.map(() => null);
 
+  // Stored split layout percentages
+  let splitX = parseFloat(localStorage.getItem('again_bento_split_x') || '45');
+  let splitY = parseFloat(localStorage.getItem('again_bento_split_y') || '58');
+
+  // Clamp initial values
+  splitX = Math.min(Math.max(splitX, 22), 75);
+  splitY = Math.min(Math.max(splitY, 25), 80);
+
   const localCodeKey = `again_code_${problem.id}`;
   const starter = problem.starterCode || problem.starter_code || '';
   let userCode = localStorage.getItem(localCodeKey) || starter;
 
-  function renderWorkbench(): void {
-    const testCases: TestCaseItem[] = casesList;
+  function renderTestCaseBox(): string {
+    if (customInputActive) {
+      return `
+        <label for="custom-input-field" class="text-[10px] font-bold tracking-wider text-brand-muted uppercase">CUSTOM INPUT (JSON OR RAW STRING)</label>
+        <input id="custom-input-field" class="w-full bg-brand-surface border border-brand-line rounded-lg px-3 py-2 text-xs font-mono text-brand-text outline-none focus:border-indigo-500" value="${escapeHtml(customInputValue)}" placeholder="e.g. { &quot;nums&quot;: [2, 7, 11, 15], &quot;target&quot;: 9 }">
+      `;
+    }
+    if (casesList[activeCaseIdx]) {
+      const tc = casesList[activeCaseIdx];
+      const tcInp = tc.inputData !== undefined ? tc.inputData : tc.input;
+      const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
 
-    const tcTabsHtml = testCases
+      return `
+        <label class="text-[10px] font-bold tracking-wider text-brand-muted uppercase">INPUT</label>
+        ${formatTestCaseData(tcInp)}
+        <label class="text-[10px] font-bold tracking-wider text-brand-muted uppercase mt-2">EXPECTED OUTPUT</label>
+        ${formatTestCaseData(tcOut)}
+      `;
+    }
+    return `<span class="text-xs text-brand-muted">No test cases available.</span>`;
+  }
+
+  function renderTestCaseTabs(): string {
+    return casesList
       .map((_, idx) => {
         const res = testResults[idx];
-        const dotCls = res === true ? 'ok' : res === false ? 'bad' : '';
+        const dotBg = res === true ? 'bg-emerald-500' : res === false ? 'bg-rose-500' : 'bg-brand-muted/40';
         const isSelected = !customInputActive && activeCaseIdx === idx;
+        const tabClasses = isSelected
+          ? 'bg-brand-surface border-brand-text text-brand-text shadow-xs font-semibold'
+          : 'bg-brand-surface2 border-brand-line text-brand-muted hover:text-brand-text';
         return `
-          <button type="button" class="${isSelected ? 'on' : ''}" data-case="${idx}">
-            <span class="dot ${dotCls}"></span>Case ${idx + 1}
+          <button type="button" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${tabClasses}" data-case="${idx}">
+            <span class="w-1.5 h-1.5 rounded-full ${dotBg}"></span>Case ${idx + 1}
           </button>
         `;
       })
       .join('') +
       `
-        <button type="button" class="${customInputActive ? 'on' : ''}" data-case="custom">
-          <span class="dot"></span>Custom
+        <button type="button" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${customInputActive ? 'bg-brand-surface border-brand-text text-brand-text shadow-xs font-semibold' : 'bg-brand-surface2 border-brand-line text-brand-muted hover:text-brand-text'}" data-case="custom">
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-muted/40"></span>Custom
         </button>
       `;
+  }
 
-    let tcBoxHtml = '';
-    if (customInputActive) {
-      tcBoxHtml = `
-        <label for="custom-input-field">CUSTOM INPUT (JSON OR RAW STRING)</label>
-        <input id="custom-input-field" value="${escapeHtml(customInputValue)}" placeholder="e.g. { &quot;nums&quot;: [2, 7, 11, 15], &quot;target&quot;: 9 }">
-      `;
-    } else if (testCases[activeCaseIdx]) {
-      const tc = testCases[activeCaseIdx];
-      const tcInp = tc.inputData !== undefined ? tc.inputData : tc.input;
-      const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
-      const rawInput =
-        typeof tcInp === 'object'
-          ? JSON.stringify(tcInp)
-          : String(tcInp ?? '');
-      const rawOutput =
-        typeof tcOut === 'object'
-          ? JSON.stringify(tcOut)
-          : String(tcOut ?? '');
+  function renderLeftTabBody(): string {
+    if (currentLeftTab === 'desc') {
+      const descMarkdown = problem?.descriptionMarkdown || problem?.description_md || '';
+      const diffBadgeColor =
+        problem?.difficulty === 'Easy'
+          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : problem?.difficulty === 'Medium'
+          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400';
 
-      tcBoxHtml = `
-        <label>INPUT</label>
-        <input readonly value="${escapeHtml(rawInput)}">
-        <label>EXPECTED OUTPUT</label>
-        <input readonly value="${escapeHtml(rawOutput)}">
+      return `
+        <div class="tags flex items-center gap-2 mb-3">
+          <span class="tg lang text-xs font-semibold px-2.5 py-0.5 rounded bg-brand-surface2 border border-brand-line text-brand-text">${escapeHtml(problem?.language || '')}</span>
+          <span class="tg text-xs font-semibold px-2.5 py-0.5 rounded ${diffBadgeColor}">${escapeHtml(problem?.difficulty || '')}</span>
+        </div>
+        <h2 class="text-xl font-bold tracking-tight text-brand-text mb-4">${escapeHtml(problem?.title || '')}</h2>
+        <div class="text-sm leading-relaxed space-y-2">
+          ${renderMarkdown(descMarkdown)}
+        </div>
       `;
     }
 
-    const descMarkdown = problem?.descriptionMarkdown || problem?.description_md || '';
-    const descHtml = `
-      <div class="tags">
-        <span class="tg lang">${escapeHtml(problem?.language || '')}</span>
-        <span class="tg ${escapeHtml(problem?.difficulty || '')}">${escapeHtml(problem?.difficulty || '')}</span>
-      </div>
-      <h2>${escapeHtml(problem?.title || '')}</h2>
-      <div style="line-height: 1.65; color: var(--muted); font-size: 13.5px; margin-top: 10px;">
-        ${escapeHtml(descMarkdown).replace(/\n/g, '<br>')}
-      </div>
+    // Submissions tab
+    if (!submissions.length) {
+      return `<p class="text-brand-muted py-8 text-center text-sm">No submissions recorded yet. Write your query and click Submit.</p>`;
+    }
 
-      <div class="tc-h">
-        <b class="h4" style="margin: 0;">TEST CASES</b>
-        <button type="button" class="link" id="toggle-custom-input-btn">
-          ${customInputActive ? '- Default test cases' : '+ Custom Input'}
-        </button>
-      </div>
-
-      <div class="tc-tabs" id="tc-tabs-bar">${tcTabsHtml}</div>
-      <div class="tc-box">${tcBoxHtml}</div>
-    `;
-
-    const subsHtml = submissions.length
-      ? `
-        <table class="subs">
-          <thead>
+    return `
+      <div class="rounded-xl border border-brand-line overflow-hidden shadow-xs">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-brand-surface2 border-b border-brand-line text-[11px] font-semibold text-brand-muted">
             <tr>
-              <th>Status</th>
-              <th>Language</th>
-              <th>Runtime</th>
-              <th>Date</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Language</th>
+              <th class="p-3">Runtime</th>
+              <th class="p-3">Date</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y divide-brand-line">
             ${submissions
               .map((s) => {
                 const isAccepted = s.status === 'Accepted';
                 return `
-                  <tr>
-                    <td class="${isAccepted ? 'ok-t' : 'bad-t'}">${escapeHtml(s.status)}</td>
-                    <td>${escapeHtml(s.language)}</td>
-                    <td>${s.executionTimeMs} ms</td>
-                    <td>${escapeHtml(s.createdAt)}</td>
+                  <tr class="hover:bg-brand-surface2/50 transition-colors">
+                    <td class="p-3 font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(s.status)}</td>
+                    <td class="p-3">${escapeHtml(s.language)}</td>
+                    <td class="p-3 font-mono">${s.executionTimeMs} ms</td>
+                    <td class="p-3 text-brand-muted">${escapeHtml(s.createdAt)}</td>
                   </tr>
                 `;
               })
               .join('')}
           </tbody>
         </table>
-      `
-      : `<p style="color: var(--muted); padding: 18px 0;">No submissions yet. Write a solution and choose Submit.</p>`;
-
-    const workbenchHtml = `
-      <div class="prob">
-        <div class="prob-top">
-          <div class="crumbs">
-            <a class="back" href="${backHref}" id="crumb-back-btn">
-              ${icon('left', 14)}
-              ${escapeHtml(backLabel)}
-            </a>
-            <span>/</span>
-            <span>${escapeHtml(problem?.language || '')}</span>
-            <span>/</span>
-            <b>${escapeHtml(problem?.title || '')}</b>
-            <span class="ready" id="execution-status-pill">READY</span>
-          </div>
-
-          <div class="acts">
-            <label class="langsel">
-              <select id="problem-lang-sel" aria-label="Language selection">
-                <option>${escapeHtml(langLabel)}</option>
-              </select>
-            </label>
-            <button type="button" class="btn" id="run-code-btn">
-              ${icon('play', 12)} Run
-            </button>
-            <button type="button" class="btn dark" id="submit-code-btn">
-              ${icon('check', 13)} Submit
-            </button>
-          </div>
-        </div>
-
-        <div class="prob-body">
-          <section class="panel left">
-            <div class="tabs" id="left-panel-tabs">
-              <button type="button" class="${currentTab === 'desc' ? 'on' : ''}" data-tab="desc">
-                ${icon('doc', 14)} Description
-              </button>
-              <button type="button" class="${currentTab === 'subs' ? 'on' : ''}" data-tab="subs">
-                ${icon('activity', 14)} Submissions
-              </button>
-            </div>
-            <div class="left-body" id="left-body-content">
-              ${currentTab === 'desc' ? descHtml : subsHtml}
-            </div>
-          </section>
-
-          <section class="ed-panel">
-            <div class="ed-head">
-              <span class="file">solution.${fileExt}</span>
-              <span>UTF-8 &nbsp;&bull;&nbsp; Spaces: 4</span>
-            </div>
-
-            <div class="ed">
-              <div class="gut" id="code-gutter" aria-hidden="true"></div>
-              <div class="code">
-                <pre id="code-highlight" aria-hidden="true"></pre>
-                <textarea id="code-textarea" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
-              </div>
-            </div>
-
-            <div class="cons">
-              <div class="cons-h">
-                <span>${icon('code', 14)} Execution Console</span>
-                <span id="console-status-label" class="m">Idle</span>
-              </div>
-              <pre id="console-output-pre"><span class="m">Run your code to see output here.</span></pre>
-            </div>
-          </section>
-        </div>
       </div>
     `;
+  }
 
-    container.innerHTML = renderShell('code', workbenchHtml, ['Code Library', problem?.title || 'Problem'], 'pm');
-    attachShellEvents(container);
+  const workbenchHtml = `
+    <div class="prob flex-1 flex flex-col h-full min-h-0 overflow-hidden w-full">
+      <!-- Breadcrumb Bar -->
+      <div class="prob-top h-10 flex-none flex items-center justify-between px-3 sm:px-4 bg-brand-surface border-b border-brand-line text-xs gap-3">
+        <div class="crumbs flex items-center gap-2 text-brand-muted text-xs truncate">
+          <a class="back inline-flex items-center gap-1 font-semibold text-brand-text hover:text-brand-muted transition-colors" href="${backHref}" id="crumb-back-btn">
+            ${icon('left', 14)}
+            ${escapeHtml(backLabel)}
+          </a>
+          <span class="text-brand-muted/40">/</span>
+          <span>${escapeHtml(problem?.language || '')}</span>
+          <span class="text-brand-muted/40">/</span>
+          <b class="text-brand-text font-semibold truncate">${escapeHtml(problem?.title || '')}</b>
+          <span class="ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" id="execution-status-pill">READY</span>
+        </div>
+      </div>
 
-    // Wire up code editor
-    const textarea = container.querySelector('#code-textarea') as HTMLTextAreaElement | null;
-    const highlightEl = container.querySelector('#code-highlight') as HTMLElement | null;
-    const gutterEl = container.querySelector('#code-gutter') as HTMLElement | null;
+      <!-- Bento Workspace Canvas -->
+      <div class="bento-workspace flex-1 flex p-2 gap-2 min-h-0 overflow-hidden bg-brand-bg select-none-during-drag" id="bento-workspace">
+        
+        <!-- Left Panel: Problem Card -->
+        <section id="bento-left" class="flex flex-col min-w-[280px] max-w-[80%] rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden" style="width: ${splitX}%;">
+          <!-- Header Tabs -->
+          <div class="h-10 flex items-center border-b border-brand-line px-3 bg-brand-surface2/50 shrink-0 gap-1" id="left-panel-tabs">
+            <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('desc') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="desc">
+              ${icon('doc', 13)} Description
+            </button>
+            <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('subs') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="subs">
+              ${icon('activity', 13)} Submissions
+            </button>
+          </div>
 
-    if (textarea && highlightEl && gutterEl) {
-      textarea.value = userCode;
-      bindCodeEditor(textarea, highlightEl, gutterEl, kind, (updated) => {
-        userCode = updated;
-        try {
-          localStorage.setItem(localCodeKey, updated);
-        } catch {
-          // ignore
-        }
-      });
+          <!-- Body Content -->
+          <div class="flex-1 p-5 overflow-y-auto" id="left-card-body">
+            ${renderLeftTabBody()}
+          </div>
+        </section>
+
+        <!-- Vertical Resizer Gutter -->
+        <div id="bento-col-resizer" class="w-2 shrink-0 flex items-center justify-center cursor-col-resize group select-none touch-none" title="Drag to resize panels">
+          <div class="w-1 h-8 rounded-full bg-brand-line group-hover:bg-blue-500 group-hover:h-14 group-hover:w-1.5 transition-all duration-150"></div>
+        </div>
+
+        <!-- Right Stack: Editor & Console -->
+        <section id="bento-right" class="flex-1 flex flex-col min-w-[320px] min-h-0 gap-2 overflow-hidden">
+          
+          <!-- Right Top Card: Code Editor -->
+          <div id="bento-editor-card" class="flex flex-col min-h-[160px] max-h-[85%] rounded-xl border border-brand-line bg-[#081120] shadow-xs overflow-hidden" style="height: ${splitY}%;">
+            <!-- Editor Top Bar -->
+            <div class="h-10 flex-none flex items-center justify-between px-3 text-xs bg-[#0c1626] border-b border-[#1b2740] gap-2">
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 rounded bg-[#182234] border border-[#25314a] text-white font-semibold text-xs flex items-center gap-1">
+                  ${escapeHtml(langLabel)}
+                </span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#182234] text-[#8d9bb3]">Auto</span>
+              </div>
+
+              <!-- Run / Action Buttons -->
+              <div class="flex items-center gap-2">
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-[#182234] hover:bg-[#25314a] text-white border border-[#25314a] transition-colors cursor-pointer" id="run-code-btn" title="Run code (Ctrl + ')">
+                  ${icon('play', 12)} Run <kbd class="ml-1 text-[10px] text-[#8d9bb3] font-mono">Ctrl '</kbd>
+                </button>
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-xs cursor-pointer" id="submit-code-btn" title="Submit solution">
+                  ${icon('check', 13)} Submit
+                </button>
+
+                <div class="h-4 w-px bg-[#25314a] mx-1"></div>
+
+                <button type="button" class="p-1.5 rounded hover:bg-[#182234] text-[#8d9bb3] hover:text-white transition-colors cursor-pointer" id="editor-format-btn" title="Format code">
+                  ${icon('brackets', 14)}
+                </button>
+                <button type="button" class="p-1.5 rounded hover:bg-[#182234] text-[#8d9bb3] hover:text-white transition-colors cursor-pointer" id="editor-reset-btn" title="Reset starter code">
+                  ${icon('reset', 14)}
+                </button>
+              </div>
+            </div>
+
+            <!-- Editor Body -->
+            <div class="ed flex-1 min-h-0 relative flex overflow-hidden font-mono text-xs">
+              <div class="gut shrink-0 select-none py-3 px-2.5 text-right font-mono text-xs leading-relaxed whitespace-pre min-w-[2.5rem] text-[#4a5873] border-r border-[#1b2740] bg-[#081120] overflow-hidden" id="code-gutter" aria-hidden="true"></div>
+              <div class="code flex-1 relative overflow-hidden">
+                <pre id="code-highlight" class="absolute inset-0 p-3 m-0 overflow-hidden pointer-events-none font-mono text-xs leading-relaxed text-[#e6ecf5]" aria-hidden="true"></pre>
+                <textarea id="code-textarea" class="absolute inset-0 p-3 m-0 w-full h-full bg-transparent resize-none border-0 outline-none font-mono text-xs leading-relaxed caret-emerald-400" style="-webkit-text-fill-color: transparent !important; color: transparent !important;" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
+              </div>
+            </div>
+
+            <!-- Editor Bottom Status Bar -->
+            <div class="h-7 flex-none flex items-center justify-between px-3 border-t border-[#1b2740] bg-[#0c1626] text-[11px] font-mono text-[#8d9bb3] select-none">
+              <span class="flex items-center gap-1.5 text-emerald-400">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Saved
+              </span>
+              <span id="editor-cursor-pos" class="text-[#8d9bb3]">Ln 1, Col 1</span>
+            </div>
+          </div>
+
+          <!-- Horizontal Resizer Gutter -->
+          <div id="bento-row-resizer" class="h-2 shrink-0 flex items-center justify-center cursor-row-resize group select-none touch-none" title="Drag to resize console">
+            <div class="h-1 w-8 rounded-full bg-brand-line group-hover:bg-blue-500 group-hover:w-14 group-hover:h-1.5 transition-all duration-150"></div>
+          </div>
+
+          <!-- Right Bottom Card: Testcase & Console -->
+          <div id="bento-console-card" class="flex-1 flex flex-col min-h-[140px] rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden">
+            <!-- Console Top Bar -->
+            <div class="h-10 flex-none flex items-center justify-between px-3 border-b border-brand-line bg-brand-surface2/50 text-xs">
+              <div class="flex items-center gap-1" id="console-tabs-bar">
+                <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isCTab('testcase') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ctab="testcase">
+                  ${icon('check', 13)} Testcase
+                </button>
+                <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isCTab('result') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ctab="result">
+                  ${icon('terminal', 13)} Test Result
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span id="console-status-label" class="text-xs font-mono text-brand-muted">Idle</span>
+              </div>
+            </div>
+
+            <!-- Console Body -->
+            <div class="flex-1 min-h-0 overflow-y-auto p-4 font-mono text-xs" id="console-card-body">
+              <!-- Content rendered dynamically based on active console tab -->
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = renderShell('code', workbenchHtml, ['Code Library', problem?.title || 'Problem'], 'pm');
+  attachShellEvents(container);
+
+  // Grab elements
+  const textarea = container.querySelector('#code-textarea') as HTMLTextAreaElement | null;
+  const highlightEl = container.querySelector('#code-highlight') as HTMLElement | null;
+  const gutterEl = container.querySelector('#code-gutter') as HTMLElement | null;
+  const cursorPosEl = container.querySelector('#editor-cursor-pos') as HTMLElement | null;
+  const consoleBody = container.querySelector('#console-card-body') as HTMLElement | null;
+  const consoleStatus = container.querySelector('#console-status-label') as HTMLElement | null;
+  const leftCardBody = container.querySelector('#left-card-body') as HTMLElement | null;
+
+  let lastConsoleOutputHtml = '';
+
+  function renderConsoleBody(): void {
+    if (!consoleBody) return;
+
+    if (currentConsoleTab === 'testcase') {
+      consoleBody.innerHTML = `
+        <div class="flex flex-col gap-3 font-sans">
+          <div class="tc-tabs flex items-center gap-2 flex-wrap" id="tc-tabs-bar">
+            ${renderTestCaseTabs()}
+          </div>
+          <div class="tc-box bg-brand-surface2 border border-brand-line rounded-lg p-3 flex flex-col gap-2">
+            ${renderTestCaseBox()}
+          </div>
+        </div>
+      `;
+      wireTestCaseEvents();
+    } else {
+      // Test Result tab
+      if (!hasRun) {
+        consoleBody.innerHTML = `
+          <div class="h-full flex items-center justify-center p-6 text-brand-muted text-sm text-center font-sans">
+            <span>You must run your code first</span>
+          </div>
+        `;
+      } else {
+        consoleBody.innerHTML = `
+          <pre id="console-output-pre" class="h-full p-1 m-0 overflow-y-auto text-brand-text text-xs font-mono whitespace-pre-wrap leading-relaxed">${lastConsoleOutputHtml}</pre>
+        `;
+      }
     }
+  }
 
-    // Tab navigation in left pane
-    const tabsBar = container.querySelector('#left-panel-tabs');
-    if (tabsBar) {
-      tabsBar.addEventListener('click', (e) => {
-        const btn = (e.target as HTMLElement).closest('[data-tab]') as HTMLButtonElement | null;
-        if (btn && btn.dataset.tab) {
-          currentTab = btn.dataset.tab as 'desc' | 'subs';
-          renderWorkbench();
-        }
-      });
-    }
-
-    // Test case tabs
+  function wireTestCaseEvents(): void {
     const tcBar = container.querySelector('#tc-tabs-bar');
     if (tcBar) {
       tcBar.addEventListener('click', (e) => {
@@ -308,86 +433,243 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
           customInputActive = false;
           activeCaseIdx = parseInt(btn.dataset.case || '0', 10);
         }
-        renderWorkbench();
+        renderConsoleBody();
       });
     }
 
-    // Toggle custom input button
-    const customToggleBtn = container.querySelector('#toggle-custom-input-btn') as HTMLButtonElement | null;
-    if (customToggleBtn) {
-      customToggleBtn.onclick = () => {
-        customInputActive = !customInputActive;
-        renderWorkbench();
-      };
-    }
-
-    // Custom input text listener
     const customInp = container.querySelector('#custom-input-field') as HTMLInputElement | null;
     if (customInp) {
       customInp.oninput = () => {
         customInputValue = customInp.value;
       };
     }
-
-    // Back button
-    const crumbBack = container.querySelector('#crumb-back-btn') as HTMLAnchorElement | null;
-    if (crumbBack) {
-      crumbBack.onclick = (e) => {
-        e.preventDefault();
-        navigate(backHref);
-      };
-    }
-
-    // Run & Submit handlers
-    const runBtn = container.querySelector('#run-code-btn') as HTMLButtonElement | null;
-    if (runBtn) {
-      runBtn.onclick = () => executeCode(false);
-    }
-
-    const submitBtn = container.querySelector('#submit-code-btn') as HTMLButtonElement | null;
-    if (submitBtn) {
-      submitBtn.onclick = () => executeCode(true);
-    }
   }
 
-  async function executeCode(isSubmission: boolean): Promise<void> {
-    const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
-    const consoleStatus = container.querySelector('#console-status-label') as HTMLElement | null;
-    const consoleOutput = container.querySelector('#console-output-pre') as HTMLElement | null;
+  // Update cursor position Ln, Col
+  function updateCursorPos(): void {
+    if (!cursorPosEl || !textarea) return;
+    const textBefore = textarea.value.substring(0, textarea.selectionStart);
+    const lines = textBefore.split('\n');
+    const curLine = lines.length;
+    const curCol = lines[lines.length - 1].length + 1;
+    cursorPosEl.textContent = `Ln ${curLine}, Col ${curCol}`;
+  }
 
+  // Wire up code editor
+  if (textarea && highlightEl && gutterEl) {
+    textarea.value = userCode;
+    bindCodeEditor(textarea, highlightEl, gutterEl, kind, (updated) => {
+      userCode = updated;
+      try {
+        localStorage.setItem(localCodeKey, updated);
+      } catch {
+        // ignore
+      }
+      updateCursorPos();
+    });
+
+    textarea.addEventListener('keyup', updateCursorPos);
+    textarea.addEventListener('click', updateCursorPos);
+    textarea.addEventListener('input', updateCursorPos);
+    updateCursorPos();
+  }
+
+  // Left panel tabs click
+  const leftTabsBar = container.querySelector('#left-panel-tabs');
+  if (leftTabsBar && leftCardBody) {
+    leftTabsBar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-ltab]') as HTMLButtonElement | null;
+      if (btn && btn.dataset.ltab) {
+        currentLeftTab = btn.dataset.ltab as typeof currentLeftTab;
+        // Update tab buttons active classes
+        leftTabsBar.querySelectorAll('[data-ltab]').forEach((b) => {
+          const el = b as HTMLElement;
+          const isActive = el.dataset.ltab === currentLeftTab;
+          el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+          }`;
+        });
+        leftCardBody.innerHTML = renderLeftTabBody();
+      }
+    });
+  }
+
+  // Console panel tabs click
+  const consoleTabsBar = container.querySelector('#console-tabs-bar');
+  if (consoleTabsBar) {
+    consoleTabsBar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-ctab]') as HTMLButtonElement | null;
+      if (btn && btn.dataset.ctab) {
+        currentConsoleTab = btn.dataset.ctab as typeof currentConsoleTab;
+        consoleTabsBar.querySelectorAll('[data-ctab]').forEach((b) => {
+          const el = b as HTMLElement;
+          const isActive = el.dataset.ctab === currentConsoleTab;
+          el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+          }`;
+        });
+        renderConsoleBody();
+      }
+    });
+  }
+
+  // Initial console render
+  renderConsoleBody();
+
+  // Reset & Format Buttons
+  const resetBtn = container.querySelector('#editor-reset-btn') as HTMLButtonElement | null;
+  if (resetBtn && textarea) {
+    resetBtn.onclick = () => {
+      if (confirm('Reset code to starter template?')) {
+        textarea.value = starter;
+        userCode = starter;
+        textarea.dispatchEvent(new Event('input'));
+        showToast('Code reset to starter template.');
+      }
+    };
+  }
+
+  const formatBtn = container.querySelector('#editor-format-btn') as HTMLButtonElement | null;
+  if (formatBtn && textarea) {
+    formatBtn.onclick = () => {
+      const lines = textarea.value.split('\n').map((l) => l.trimEnd());
+      textarea.value = lines.join('\n');
+      textarea.dispatchEvent(new Event('input'));
+      showToast('Formatted whitespace.');
+    };
+  }
+
+  // Drag resizers
+  const colResizer = container.querySelector('#bento-col-resizer') as HTMLElement | null;
+  const rowResizer = container.querySelector('#bento-row-resizer') as HTMLElement | null;
+  const leftCard = container.querySelector('#bento-left') as HTMLElement | null;
+  const editorCard = container.querySelector('#bento-editor-card') as HTMLElement | null;
+  const workspace = container.querySelector('#bento-workspace') as HTMLElement | null;
+  const rightCol = container.querySelector('#bento-right') as HTMLElement | null;
+
+  let isDraggingCol = false;
+  let isDraggingRow = false;
+
+  if (colResizer && leftCard && workspace) {
+    colResizer.addEventListener('pointerdown', (e: PointerEvent) => {
+      isDraggingCol = true;
+      colResizer.setPointerCapture(e.pointerId);
+      document.body.classList.add('cursor-col-resize', 'select-none');
+    });
+
+    colResizer.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!isDraggingCol) return;
+      const rect = workspace.getBoundingClientRect();
+      const percent = Math.min(Math.max(((e.clientX - rect.left) / rect.width) * 100, 20), 75);
+      leftCard.style.width = `${percent}%`;
+      splitX = percent;
+    });
+
+    const onPointerUpCol = (e: PointerEvent) => {
+      if (!isDraggingCol) return;
+      isDraggingCol = false;
+      try {
+        colResizer.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      document.body.classList.remove('cursor-col-resize', 'select-none');
+      localStorage.setItem('again_bento_split_x', splitX.toFixed(1));
+    };
+
+    colResizer.addEventListener('pointerup', onPointerUpCol);
+    colResizer.addEventListener('pointercancel', onPointerUpCol);
+  }
+
+  if (rowResizer && editorCard && rightCol) {
+    rowResizer.addEventListener('pointerdown', (e: PointerEvent) => {
+      isDraggingRow = true;
+      rowResizer.setPointerCapture(e.pointerId);
+      document.body.classList.add('cursor-row-resize', 'select-none');
+    });
+
+    rowResizer.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!isDraggingRow) return;
+      const rect = rightCol.getBoundingClientRect();
+      const percent = Math.min(Math.max(((e.clientY - rect.top) / rect.height) * 100, 20), 80);
+      editorCard.style.height = `${percent}%`;
+      splitY = percent;
+    });
+
+    const onPointerUpRow = (e: PointerEvent) => {
+      if (!isDraggingRow) return;
+      isDraggingRow = false;
+      try {
+        rowResizer.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      document.body.classList.remove('cursor-row-resize', 'select-none');
+      localStorage.setItem('again_bento_split_y', splitY.toFixed(1));
+    };
+
+    rowResizer.addEventListener('pointerup', onPointerUpRow);
+    rowResizer.addEventListener('pointercancel', onPointerUpRow);
+  }
+
+  // Back button
+  const crumbBack = container.querySelector('#crumb-back-btn') as HTMLAnchorElement | null;
+  if (crumbBack) {
+    crumbBack.onclick = (e) => {
+      e.preventDefault();
+      navigate(backHref);
+    };
+  }
+
+  // Execute Code Logic
+  async function executeCode(isSubmission: boolean): Promise<void> {
+    hasRun = true;
+    currentConsoleTab = 'result';
+
+    // Switch console tab to result in UI
+    if (consoleTabsBar) {
+      consoleTabsBar.querySelectorAll('[data-ctab]').forEach((b) => {
+        const el = b as HTMLElement;
+        const isActive = el.dataset.ctab === 'result';
+        el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+          isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+        }`;
+      });
+    }
+
+    const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
     if (statusPill) {
       statusPill.textContent = 'RUNNING';
-      statusPill.className = 'ready run';
+      statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400';
     }
     if (consoleStatus) {
       consoleStatus.textContent = 'Running...';
-      consoleStatus.className = 'm';
+      consoleStatus.className = 'text-xs font-mono text-amber-500';
     }
-    if (consoleOutput) {
-      consoleOutput.innerHTML = '<span class="m">Executing sandbox environment...</span>';
-    }
+
+    lastConsoleOutputHtml = '<span class="text-brand-muted">Executing in sandbox environment...</span>';
+    renderConsoleBody();
 
     try {
       if (isSql) {
-        const res = await runSql({ problemId, userQuery: userCode });
+        const res = await runSql({ problemId, userQuery: userCode, is_submission: isSubmission });
         handleSqlResult(res, isSubmission);
       } else {
-        const res = await runPython({ problemId, code: userCode });
+        const res = await runPython({ problemId, code: userCode, is_submission: isSubmission });
         handlePythonResult(res, isSubmission);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Execution failed';
       if (statusPill) {
         statusPill.textContent = 'ERROR';
-        statusPill.className = 'ready err';
+        statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400';
       }
       if (consoleStatus) {
         consoleStatus.textContent = 'Execution Error';
-        consoleStatus.className = 'r';
+        consoleStatus.className = 'text-xs font-mono text-rose-500';
       }
-      if (consoleOutput) {
-        consoleOutput.innerHTML = `<span class="r">${escapeHtml(msg)}</span>`;
-      }
+      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(msg)}</span>`;
+      renderConsoleBody();
     }
   }
 
@@ -396,12 +678,9 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     isSubmission: boolean
   ): void {
     const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
-    const consoleStatus = container.querySelector('#console-status-label') as HTMLElement | null;
-    const consoleOutput = container.querySelector('#console-output-pre') as HTMLElement | null;
-
     if (statusPill) {
       statusPill.textContent = 'READY';
-      statusPill.className = 'ready';
+      statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
     }
 
     for (let i = 0; i < testResults.length; i++) {
@@ -411,15 +690,16 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     const ms = res.durationMs ?? res.duration_ms ?? res.runtime_ms ?? 0;
     const total = res.totalCount ?? res.total_count ?? 3;
     const passedCount = res.passedCount ?? res.passed_count ?? 0;
+    const isAccepted = res.passed && res.status === 'Accepted';
 
-    if (res.passed) {
+    if (isAccepted) {
       if (consoleStatus) {
         consoleStatus.textContent = `Passed (${ms}ms)`;
-        consoleStatus.className = 'g';
+        consoleStatus.className = 'text-xs font-mono text-emerald-500 font-semibold';
       }
-      if (consoleOutput) {
-        consoleOutput.innerHTML = `stdout:\n${escapeHtml(res.output)}\n<span class="g">&#10003; All ${total} test cases passed.</span>`;
-      }
+      lastConsoleOutputHtml = `stdout:\n${escapeHtml(res.output)}\n<span class="text-emerald-500 font-semibold">Passed: All ${total} test cases passed.</span>`;
+      renderConsoleBody();
+
       if (isSubmission) {
         markProblemSolved(problemId);
         showToast('Accepted. Marked as solved.', 'Next problem', () => {
@@ -433,18 +713,17 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     } else {
       if (consoleStatus) {
         consoleStatus.textContent = `${res.status} (${ms}ms)`;
-        consoleStatus.className = 'r';
+        consoleStatus.className = 'text-xs font-mono text-rose-500 font-semibold';
       }
       const errDetail = res.error ? `\n${escapeHtml(res.error)}` : '';
-      if (consoleOutput) {
-        consoleOutput.innerHTML = `<span class="r">${escapeHtml(res.status)}: ${passedCount}/${total} test cases passed.${errDetail}</span>\n${escapeHtml(res.output)}`;
-      }
+      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(res.status)}: ${passedCount}/${total} test cases passed.${errDetail}</span>\n${escapeHtml(res.output)}`;
+      renderConsoleBody();
+
       if (isSubmission) {
-        showToast('Wrong answer. Check the console for details.');
+        showToast('Wrong answer. Check test results for details.');
       }
     }
 
-    // Refresh submissions history after run/submission
     getProblemSubmissions(problemId)
       .then((updated) => {
         submissions = updated;
@@ -453,16 +732,13 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   }
 
   function handleSqlResult(
-    res: { passed: boolean; status: string; columns?: string[]; rows?: unknown[][]; durationMs?: number; duration_ms?: number; runtime_ms?: number; error?: string | null },
+    res: { passed: boolean; status: string; columns?: string[]; rows?: unknown[][]; durationMs?: number; duration_ms?: number; runtime_ms?: number; diff?: string | null; error?: string | null },
     isSubmission: boolean
   ): void {
     const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
-    const consoleStatus = container.querySelector('#console-status-label') as HTMLElement | null;
-    const consoleOutput = container.querySelector('#console-output-pre') as HTMLElement | null;
-
     if (statusPill) {
       statusPill.textContent = 'READY';
-      statusPill.className = 'ready';
+      statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
     }
 
     for (let i = 0; i < testResults.length; i++) {
@@ -478,15 +754,16 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
           .map((r) => (Array.isArray(r) ? r.join(' | ') : JSON.stringify(r)))
           .join('\n')
       : '';
+    const isAccepted = res.passed && res.status === 'Accepted';
 
-    if (res.passed) {
+    if (isAccepted) {
       if (consoleStatus) {
         consoleStatus.textContent = `Passed (${ms}ms)`;
-        consoleStatus.className = 'g';
+        consoleStatus.className = 'text-xs font-mono text-emerald-500 font-semibold';
       }
-      if (consoleOutput) {
-        consoleOutput.innerHTML = `<span class="g">&#10003; Output matched expected dataset (${rowCount} rows).</span>\n${escapeHtml(cols)}\n${escapeHtml(tableRows)}`;
-      }
+      lastConsoleOutputHtml = `<span class="text-emerald-500 font-semibold">Matched canonical output dataset (${rowCount} rows).</span>\n${escapeHtml(cols)}\n${escapeHtml(tableRows)}`;
+      renderConsoleBody();
+
       if (isSubmission) {
         markProblemSolved(problemId);
         showToast('Accepted. Query matches canonical solution.');
@@ -494,14 +771,15 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     } else {
       if (consoleStatus) {
         consoleStatus.textContent = `${res.status} (${ms}ms)`;
-        consoleStatus.className = 'r';
+        consoleStatus.className = 'text-xs font-mono text-rose-500 font-semibold';
       }
-      const errText = res.error ? `\n${escapeHtml(res.error)}` : '';
-      if (consoleOutput) {
-        consoleOutput.innerHTML = `<span class="r">${escapeHtml(res.status)}${errText}</span>`;
-      }
+      const errText = res.error ? `\nError: ${escapeHtml(res.error)}` : '';
+      const diffDetail = res.diff ? `\nDiff: ${escapeHtml(res.diff)}` : '';
+      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(res.status)}</span>${errText}${diffDetail}`;
+      renderConsoleBody();
+
       if (isSubmission) {
-        showToast('Query did not match canonical output.');
+        showToast(res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match canonical output.' : 'Execution failed.');
       }
     }
 
@@ -512,5 +790,23 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       .catch(() => {});
   }
 
-  renderWorkbench();
+  // Run & Submit button listeners
+  const runBtn = container.querySelector('#run-code-btn') as HTMLButtonElement | null;
+  if (runBtn) {
+    runBtn.onclick = () => executeCode(false);
+  }
+
+  const submitBtn = container.querySelector('#submit-code-btn') as HTMLButtonElement | null;
+  if (submitBtn) {
+    submitBtn.onclick = () => executeCode(true);
+  }
+
+  // Global Ctrl + ' / Cmd + ' shortcut to run code
+  const keydownHandler = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "'") {
+      e.preventDefault();
+      executeCode(false);
+    }
+  };
+  window.addEventListener('keydown', keydownHandler);
 }

@@ -89,7 +89,9 @@ subscribe((state) => {
   // Update shell status indicators if present on DOM
   const statusDot = document.getElementById('shell-status-dot');
   if (statusDot) {
-    statusDot.className = state.backendConnected ? 'dot ok' : 'dot bad';
+    statusDot.className = state.backendConnected
+      ? 'w-2 h-2 rounded-full inline-block bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+      : 'w-2 h-2 rounded-full inline-block bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
   }
   const statusLabel = document.getElementById('shell-status-label');
   if (statusLabel) {

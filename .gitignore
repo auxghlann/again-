@@ -31,6 +31,7 @@ env/
 .coverage
 htmlcov/
 test-results/
+.playwright-mcp/
 
 # Local databases
 data/*.db

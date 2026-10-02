@@ -36,12 +36,14 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
   function filterPlans(): StudyPlanSummary[] {
     const q = codeSearchQuery.trim().toLowerCase();
     return plans.filter((p) => {
-      const matchesLang = activeLangChip === 'All' || p.category === activeLangChip;
+      const planCat = p.category || p.language || 'SQL';
+      const matchesLang = activeLangChip === 'All' || planCat.toLowerCase() === activeLangChip.toLowerCase();
+      const tags = p.tags || [];
       const matchesSearch =
         !q ||
         p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q));
+        (p.description && p.description.toLowerCase().includes(q)) ||
+        tags.some((t) => t.toLowerCase().includes(q));
       return matchesLang && matchesSearch;
     });
   }
@@ -51,7 +53,13 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
     const countText = `${filtered.length} Study plan${filtered.length === 1 ? '' : 's'}`;
 
     const chipsHtml = CODE_LANG_CHIPS.map(
-      (c) => `<button type="button" class="chip ${c === activeLangChip ? 'on' : ''}" data-chip="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+      (c) => {
+        const isActive = c === activeLangChip;
+        const chipClasses = isActive
+          ? 'bg-[#0e1a2c] text-white dark:bg-white dark:text-[#0e1a2c]'
+          : 'bg-brand-line/60 text-brand-muted hover:text-brand-text hover:bg-brand-line';
+        return `<button type="button" class="chip text-[11px] font-medium px-3 py-1 rounded-full transition-colors ${chipClasses} ${isActive ? 'on' : ''}" data-chip="${escapeHtml(c)}">${escapeHtml(c)}</button>`;
+      }
     ).join('');
 
     const optionsHtml = CODE_LANG_CHIPS.map(
@@ -61,50 +69,59 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
     const cardsHtml = filtered.length
       ? filtered
           .map((plan) => {
-            const isCompleted = plan.problemCount > 0 && plan.completedCount >= plan.problemCount;
-            const isInProgress = !isCompleted && plan.completedCount > 0;
-            const stateLabel = isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : 'STUDY PLAN';
+            const totalCount = plan.problemCount ?? plan.total_problems ?? 0;
+            const solvedCount = plan.completedCount ?? plan.solved_count ?? 0;
+            const category = plan.category || plan.language || 'SQL';
+            const isCompleted = totalCount > 0 && solvedCount >= totalCount;
+            const isInProgress = !isCompleted && solvedCount > 0;
+            const stateLabel = isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : (plan.badge_text || 'STUDY PLAN');
             const btnLabel = isCompleted ? 'Review' : isInProgress ? 'Continue' : 'Start';
-            const percent = plan.problemCount > 0 ? Math.round((plan.completedCount / plan.problemCount) * 100) : 0;
-            const langIcon = plan.category === 'SQL' ? 'db' : 'brackets';
+            const percent = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0;
+            const langIcon = category.toLowerCase().includes('sql') ? 'db' : 'brackets';
+
+            const cardBorder = isInProgress ? 'border-brand-text shadow-xs' : 'border-brand-line hover:border-brand-muted/60';
+            const labelColor = isCompleted || isInProgress ? 'text-emerald-500' : 'text-brand-muted';
+            const btnClasses = isInProgress
+              ? 'bg-brand-text text-brand-surface border-brand-text'
+              : 'bg-brand-surface border-brand-line text-brand-text hover:bg-brand-surface2';
 
             return `
-              <a class="card ${isInProgress ? 'ip' : ''}" href="#/plans/${encodeURIComponent(plan.id)}">
-                <div class="c-label ${isCompleted || isInProgress ? 'g' : ''}">${stateLabel}</div>
-                <h3>${escapeHtml(plan.title)}</h3>
-                <div class="bar" title="${plan.completedCount} of ${plan.problemCount} solved">
-                  <i style="width: ${percent}%;"></i>
+              <a class="card flex flex-col bg-brand-surface border rounded-xl p-5 min-h-[130px] transition-all ${cardBorder} ${isInProgress ? 'ip' : ''}" href="#/plans/${encodeURIComponent(plan.id)}">
+                <div class="c-label text-[10px] font-semibold tracking-wider ${labelColor} ${isCompleted || isInProgress ? 'g' : ''}">${stateLabel}</div>
+                <h3 class="mt-2 font-bold text-[15px] leading-snug tracking-tight text-brand-text">${escapeHtml(plan.title)}</h3>
+                <div class="bar h-1 bg-brand-line rounded-full mt-3 overflow-hidden" title="${solvedCount} of ${totalCount} solved">
+                  <i class="block h-full bg-emerald-500 transition-all duration-300" style="width: ${percent}%;"></i>
                 </div>
-                <div class="c-foot">
-                  <span class="tool">
+                <div class="c-foot mt-auto pt-3.5 flex items-center justify-between text-xs text-brand-muted">
+                  <span class="tool flex items-center gap-1.5">
                     ${icon(langIcon, 13)}
-                    ${escapeHtml(plan.category)} &middot; ${plan.completedCount}/${plan.problemCount}
+                    ${escapeHtml(category)} &middot; ${solvedCount}/${totalCount}
                   </span>
-                  <span class="btn ${isInProgress ? 'dark' : ''}">${btnLabel}</span>
+                  <span class="btn inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-md border transition-colors ${btnClasses} ${isInProgress ? 'dark' : ''}">${btnLabel}</span>
                 </div>
               </a>
             `;
           })
           .join('')
-      : `<div class="empty">Nothing matches that search. Clear the search or pick another filter.</div>`;
+      : `<div class="empty col-span-full w-full p-10 text-center text-sm text-brand-muted bg-brand-surface border border-dashed border-brand-line rounded-xl my-2">Nothing matches that search. Clear the search or pick another filter.</div>`;
 
     const contentHtml = `
-      <div class="page">
-        <div class="chips" id="code-chips">${chipsHtml}</div>
-        <div class="tools">
-          <div class="count" id="code-count">${countText}</div>
-          <div class="tools-r">
-            <label class="search">
+      <div class="page p-6 max-w-6xl w-full">
+        <div class="chips flex flex-wrap gap-2" id="code-chips">${chipsHtml}</div>
+        <div class="tools flex items-center justify-between gap-3 flex-wrap my-5">
+          <div class="count text-xs font-semibold text-brand-text" id="code-count">${countText}</div>
+          <div class="tools-r flex items-center gap-2.5 flex-wrap">
+            <label class="search flex items-center gap-2 bg-brand-surface border border-brand-line rounded-lg px-2.5 h-8 text-xs text-brand-muted focus-within:border-brand-text/50">
               ${icon('search', 14)}
-              <input id="code-search" type="search" placeholder="Search study plans..." value="${escapeHtml(codeSearchQuery)}" aria-label="Search study plans">
+              <input id="code-search" class="bg-transparent border-0 outline-none w-44 text-xs text-brand-text placeholder:text-brand-muted" type="search" placeholder="Search study plans..." value="${escapeHtml(codeSearchQuery)}" aria-label="Search study plans">
             </label>
-            <label class="sel">
+            <label class="sel flex items-center gap-1.5 bg-brand-surface border border-brand-line rounded-lg px-2.5 h-8 text-xs text-brand-muted">
               <span>Language:</span>
-              <select id="code-sel" aria-label="Filter language">${optionsHtml}</select>
+              <select id="code-sel" class="bg-transparent border-0 outline-none text-xs font-semibold text-brand-text cursor-pointer pr-1" aria-label="Filter language">${optionsHtml}</select>
             </label>
           </div>
         </div>
-        <div class="grid" id="code-grid">${cardsHtml}</div>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5" id="code-grid">${cardsHtml}</div>
       </div>
     `;
 

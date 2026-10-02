@@ -23,7 +23,7 @@ def run_all_cases():
     passed_count = 0
     logs = []
     first_error = None
-    overall_status = "Accepted"
+    overall_status = "Accepted" if total_count > 0 else "No Test Cases"
 
     # Find the target callable
     target_func = None
@@ -86,9 +86,10 @@ def run_all_cases():
                 first_error = traceback.format_exc()
 
     passed = (passed_count == total_count and total_count > 0)
+    final_status = "Accepted" if passed else (overall_status if overall_status != "Accepted" else "Wrong Answer")
     print(json.dumps({{
         "passed": passed,
-        "status": "Accepted" if passed else overall_status,
+        "status": final_status,
         "passed_count": passed_count,
         "total_count": total_count,
         "output": "\\n".join(logs) + ("\\n" if logs else ""),

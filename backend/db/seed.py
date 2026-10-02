@@ -335,10 +335,41 @@ RECYCLABLE_SQL_MD = """Write a solution to find the ids of products that are bot
 
 Return the result table in any order.
 
-### Table Schema: `Products`
-* `product_id` (int) - Primary key
-* `low_fats` (char) - 'Y' if low fat, 'N' otherwise
-* `recyclable` (char) - 'Y' if recyclable, 'N' otherwise
+### Table: `Products`
+
+| Column Name | Type |
+|---|---|
+| `product_id` | int |
+| `low_fats` | enum |
+| `recyclable` | enum |
+
+`product_id` is the primary key for this table.
+`low_fats` is an ENUM of type ('Y', 'N').
+`recyclable` is an ENUM of type ('Y', 'N').
+
+### Example 1
+
+**Input:**
+
+`Products` table:
+
+| product_id | low_fats | recyclable |
+|---|---|---|
+| 0 | Y | N |
+| 1 | Y | Y |
+| 2 | N | Y |
+| 3 | Y | Y |
+| 4 | N | N |
+
+**Output:**
+
+| product_id |
+|---|
+| 1 |
+| 3 |
+
+**Explanation:**
+Only products `1` and `3` are both low fat and recyclable.
 """
 
 
@@ -442,7 +473,8 @@ def _seed_with_session(db: Session) -> Dict[str, int]:
                 solution = starter
                 setup = None
 
-            if not db.get(CodingProblem, prob_id):
+            existing_prob = db.get(CodingProblem, prob_id)
+            if not existing_prob:
                 db.add(CodingProblem(
                     id=prob_id,
                     plan_id=pl["id"],
@@ -457,6 +489,10 @@ def _seed_with_session(db: Session) -> Dict[str, int]:
                     canonical_solution=solution,
                 ))
                 counts["problems"] += 1
+            else:
+                existing_prob.description_md = desc
+                existing_prob.setup_sql = setup
+                existing_prob.canonical_solution = solution
 
     # 5. Seed Test Cases for Two Sum and Recyclable Products
     two_sum_cases = [

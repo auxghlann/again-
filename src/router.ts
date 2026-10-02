@@ -28,6 +28,21 @@ const routePatterns: RoutePattern[] = [
     paramNames: ['id'],
   },
   {
+    name: 'dashboard',
+    regex: /^#\/dashboard\/?$/,
+    paramNames: [],
+  },
+  {
+    name: 'activity',
+    regex: /^#\/activity\/?$/,
+    paramNames: [],
+  },
+  {
+    name: 'resources',
+    regex: /^#\/resources\/?$/,
+    paramNames: [],
+  },
+  {
     name: 'code',
     regex: /^#\/(?:code|plans)\/?$/,
     paramNames: [],

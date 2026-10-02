@@ -74,11 +74,16 @@ export interface StudyPlanSummary {
   id: string;
   title: string;
   description: string;
-  category: string;
-  difficulty: DifficultyLevel;
-  problemCount: number;
-  completedCount: number;
-  tags: string[];
+  category?: string;
+  difficulty?: DifficultyLevel;
+  problemCount?: number;
+  completedCount?: number;
+  tags?: string[];
+  subtitle?: string;
+  language?: string;
+  badge_text?: string;
+  total_problems?: number;
+  solved_count?: number;
 }
 
 export interface PlanProblemChecklistItem {
@@ -151,8 +156,13 @@ export interface SubmissionItem {
 
 // Execution Sandboxes Schemas
 export interface SqlRunRequest {
-  problemId: string;
-  userQuery: string;
+  problemId?: string;
+  problem_id?: string;
+  userQuery?: string;
+  user_sql?: string;
+  sql?: string;
+  code?: string;
+  is_submission?: boolean;
 }
 
 export interface SqlRunResponse {
@@ -165,12 +175,16 @@ export interface SqlRunResponse {
   durationMs?: number;
   duration_ms?: number;
   runtime_ms?: number;
+  diff?: string | null;
   error?: string | null;
 }
 
 export interface PythonRunRequest {
-  problemId: string;
-  code: string;
+  problemId?: string;
+  problem_id?: string;
+  code?: string;
+  user_code?: string;
+  is_submission?: boolean;
 }
 
 export interface PythonRunResponse {

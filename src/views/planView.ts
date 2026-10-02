@@ -79,58 +79,65 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
       .map((p) => {
         const pid = p.id || p.problemId || '';
         const isDone = solvedSet.has(pid) || !!p.solved;
+        const diffColor =
+          p.difficulty === 'Easy'
+            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+            : p.difficulty === 'Medium'
+            ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
+            : 'text-rose-600 dark:text-rose-400 bg-rose-500/10';
+
         return `
-          <div class="row" data-pid="${escapeHtml(pid)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(p.title)}">
-            <button type="button" class="tick ${isDone ? 'done' : ''}" data-tick="${escapeHtml(pid)}" aria-label="Mark ${escapeHtml(p.title)} as solved">
+          <div class="row flex items-center gap-3.5 px-5 min-h-[58px] cursor-pointer hover:bg-brand-surface2/80 transition-colors" data-pid="${escapeHtml(pid)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(p.title)}">
+            <button type="button" class="tick shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-brand-muted/40 hover:border-brand-muted bg-transparent text-transparent'} ${isDone ? 'done' : ''}" data-tick="${escapeHtml(pid)}" aria-label="Mark ${escapeHtml(p.title)} as solved">
               ${isDone ? icon('check', 12) : ''}
             </button>
-            <div class="rt">
-              <div class="t">${escapeHtml(p.title)}</div>
-              <div class="tgs">
-                <span>${escapeHtml(p.difficulty)}</span>
-                <span>${escapeHtml(p.language || planCategory)}</span>
+            <div class="rt flex-1 min-w-0">
+              <div class="t text-sm font-semibold text-brand-text truncate">${escapeHtml(p.title)}</div>
+              <div class="tgs gap-1.5 mt-1 flex-wrap">
+                <span class="text-[11px] bg-brand-line/60 text-brand-muted px-2 py-0.5 rounded">${escapeHtml(p.difficulty)}</span>
+                <span class="text-[11px] bg-brand-line/60 text-brand-muted px-2 py-0.5 rounded">${escapeHtml(p.language || planCategory)}</span>
               </div>
             </div>
-            <button type="button" class="sol" data-sol>
+            <button type="button" class="sol inline-flex items-center gap-1.5 text-xs text-brand-muted hover:text-brand-text px-2 py-1 rounded transition-colors" data-sol>
               ${icon('doc', 14)}
               <span>Solution</span>
             </button>
-            <span class="df ${escapeHtml(p.difficulty)}">${escapeHtml(p.difficulty)}</span>
+            <span class="df text-[11px] font-semibold px-2.5 py-0.5 rounded capitalize ${diffColor} ${escapeHtml(p.difficulty)}">${escapeHtml(p.difficulty)}</span>
           </div>
         `;
       })
       .join('');
 
     const contentHtml = `
-      <div class="page">
-        <div class="ph">
+      <div class="page p-6 max-w-5xl mx-auto w-full">
+        <div class="ph flex justify-between items-end gap-4 flex-wrap mb-4">
           <div>
-            <div class="c-label">STUDY PLAN</div>
-            <h1 class="pg">${escapeHtml(planTitle)}</h1>
-            <p class="sub">${escapeHtml(planDesc)}</p>
+            <div class="c-label text-[10px] font-semibold tracking-wider text-brand-muted uppercase">STUDY PLAN</div>
+            <h1 class="pg text-2xl font-bold tracking-tight text-brand-text mt-0.5">${escapeHtml(planTitle)}</h1>
+            <p class="sub text-sm text-brand-muted mt-1">${escapeHtml(planDesc)}</p>
           </div>
-          <div class="ph-r">
-            <button class="btn lg" type="button" id="share-plan-btn">${icon('share', 14)} Share</button>
-            <button class="btn dark lg" type="button" id="start-plan-btn">${icon('play', 12)} <span>${startBtnText}</span></button>
+          <div class="ph-r flex items-center gap-2">
+            <button class="btn lg inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-brand-surface text-brand-text border border-brand-line hover:bg-brand-surface2 transition-colors" type="button" id="share-plan-btn">${icon('share', 14)} Share</button>
+            <button class="btn dark lg inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-[#0e1a2c] dark:bg-white text-white dark:text-[#0e1a2c] hover:opacity-90 transition-opacity" type="button" id="start-plan-btn">${icon('play', 12)} <span>${startBtnText}</span></button>
           </div>
         </div>
 
-        <div class="ph-prog">
-          <div class="bar">
-            <i id="plan-barfill" style="width: ${percent}%;"></i>
+        <div class="ph-prog flex items-center gap-3 my-4 text-xs text-brand-muted">
+          <div class="bar flex-1 max-w-xs h-1.5 bg-brand-line rounded-full overflow-hidden">
+            <i id="plan-barfill" class="block h-full bg-emerald-500 transition-all duration-300" style="width: ${percent}%;"></i>
           </div>
-          <span id="plan-prog-label">${solvedCount} of ${problems.length} solved</span>
+          <span id="plan-prog-label" class="font-medium">${solvedCount} of ${problems.length} solved</span>
         </div>
 
-        <div class="tools">
-          <div class="count">${problems.length} Problems</div>
-          <label class="showtags">
-            <input type="checkbox" id="plan-tags-toggle">
+        <div class="tools flex items-center justify-between gap-3 my-4">
+          <div class="count text-xs font-semibold text-brand-text">${problems.length} Problems</div>
+          <label class="showtags flex items-center gap-2 text-xs text-brand-muted cursor-pointer select-none">
+            <input type="checkbox" id="plan-tags-toggle" class="rounded accent-emerald-500 cursor-pointer">
             Show tags
           </label>
         </div>
 
-        <div class="pl" id="problem-list-container">
+        <div class="pl bg-brand-surface border border-brand-line rounded-xl overflow-hidden mt-4 divide-y divide-brand-line shadow-xs" id="problem-list-container">
           <div id="plan-rows">${rowsHtml}</div>
         </div>
       </div>

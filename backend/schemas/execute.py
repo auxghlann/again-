@@ -8,6 +8,7 @@ class SqlRunRequest(BaseModel):
 
     problem_id: str = Field(validation_alias=AliasChoices("problem_id", "problemId"))
     user_sql: str = Field(min_length=1, validation_alias=AliasChoices("user_sql", "userSql", "userQuery", "code"))
+    is_submission: bool = Field(default=False, validation_alias=AliasChoices("is_submission", "isSubmission"))
 
 
 class SqlRunResponse(BaseModel):
@@ -35,6 +36,7 @@ class PythonRunRequest(BaseModel):
 
     problem_id: str = Field(validation_alias=AliasChoices("problem_id", "problemId"))
     user_code: str = Field(min_length=1, validation_alias=AliasChoices("user_code", "userCode", "code"))
+    is_submission: bool = Field(default=False, validation_alias=AliasChoices("is_submission", "isSubmission"))
 
 
 class PythonRunResponse(BaseModel):
