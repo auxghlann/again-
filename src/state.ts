@@ -10,6 +10,7 @@ export type Theme = 'light' | 'dark';
 
 export interface AppState {
   theme: Theme;
+  sidebarCollapsed: boolean;
   activeRoute: string;
   routeParams: Record<string, string>;
   backendConnected: boolean;
@@ -21,6 +22,7 @@ export interface AppState {
 }
 
 const THEME_STORAGE_KEY = 'again_theme';
+const SIDEBAR_STORAGE_KEY = 'again_sidebar_collapsed';
 
 function detectInitialTheme(): Theme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
@@ -33,12 +35,17 @@ function detectInitialTheme(): Theme {
   return 'light';
 }
 
+function detectInitialSidebarCollapsed(): boolean {
+  return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
+}
+
 function applyThemeToDOM(theme: Theme): void {
   document.documentElement.setAttribute('data-theme', theme);
 }
 
 const state: AppState = {
   theme: detectInitialTheme(),
+  sidebarCollapsed: detectInitialSidebarCollapsed(),
   activeRoute: 'practice',
   routeParams: {},
   backendConnected: false,
@@ -100,4 +107,13 @@ export function setTheme(theme: Theme): void {
 export function toggleTheme(): void {
   const nextTheme: Theme = state.theme === 'dark' ? 'light' : 'dark';
   setTheme(nextTheme);
+}
+
+export function setSidebarCollapsed(collapsed: boolean): void {
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? 'true' : 'false');
+  setState({ sidebarCollapsed: collapsed });
+}
+
+export function toggleSidebar(): void {
+  setSidebarCollapsed(!state.sidebarCollapsed);
 }

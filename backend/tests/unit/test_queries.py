@@ -317,14 +317,14 @@ def test_submissions_crud(db_session: Session):
 
 def test_seed_db_idempotency(db_session: Session):
     """Verifies that seed_db populates the database and does not duplicate on second execution."""
-    res1 = seed_db(db_session)
+    res1 = seed_db(db_session, reset_coding=False)
     assert res1["topics"] == 20
     assert res1["questions"] == 80
-    assert res1["plans"] == 5
-    assert res1["problems"] == 60
-    assert res1["test_cases"] == 4
+    assert res1["plans"] == 3
+    assert res1["problems"] == 15
+    assert res1["test_cases"] == 15
 
-    res2 = seed_db(db_session)
+    res2 = seed_db(db_session, reset_coding=False)
     assert res2["topics"] == 0
     assert res2["questions"] == 0
     assert res2["plans"] == 0

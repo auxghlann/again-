@@ -144,14 +144,20 @@ export interface CodingProblemDetailResponse {
 
 export interface SubmissionItem {
   id: string;
-  problemId: string;
-  code: string;
+  problemId?: string;
+  problem_id?: string;
+  code?: string;
+  submitted_code?: string;
+  submittedCode?: string;
   language: string;
-  status: SubmissionStatus;
-  passedCount: number;
-  totalCount: number;
-  executionTimeMs: number;
-  createdAt: string;
+  status: SubmissionStatus | string;
+  passedCount?: number;
+  totalCount?: number;
+  executionTimeMs?: number;
+  runtime_ms?: number;
+  runtimeMs?: number;
+  createdAt?: string;
+  created_at?: string;
 }
 
 // Execution Sandboxes Schemas

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import time
 from typing import Any, Dict, List, Optional
 import psycopg2
@@ -27,6 +28,20 @@ def check_postgres_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+def _normalize_cell(val: Any) -> Any:
+    """Normalizes cell values across Decimal, float, int, and string types."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float, Decimal)):
+        return round(float(val), 6)
+    if isinstance(val, str):
+        try:
+            return round(float(val), 6)
+        except ValueError:
+            return val.strip()
+    return val
 
 
 def run_sql_sandbox(
@@ -93,10 +108,12 @@ def run_sql_sandbox(
         if exp_rows is not None:
             # Normalize for comparison
             normalized_user = [
-                {str(k).lower(): v for k, v in row.items()} for row in user_rows
+                {str(k).lower(): _normalize_cell(v) for k, v in row.items()}
+                for row in user_rows
             ]
             normalized_exp = [
-                {str(k).lower(): v for k, v in row.items()} for row in exp_rows
+                {str(k).lower(): _normalize_cell(v) for k, v in row.items()}
+                for row in exp_rows
             ]
 
             if len(normalized_user) != len(normalized_exp):

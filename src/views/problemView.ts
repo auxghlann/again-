@@ -16,6 +16,7 @@ import type {
 } from '../types';
 
 import { renderMarkdown } from '../utils/markdown';
+import { formatAsciiTable } from '../utils/tableFormatter';
 
 const SOLVED_STORAGE_KEY = 'again_solved_problems';
 
@@ -30,37 +31,53 @@ function markProblemSolved(problemId: string): void {
   }
 }
 
+function formatSingleTableHtml(tableName: string | null, cols: string[], rows: Record<string, unknown>[] | null): string {
+  let tableHtml = `<div class="rounded-lg border border-brand-line overflow-hidden my-1.5 bg-brand-surface text-xs font-mono">`;
+  if (tableName) {
+    tableHtml += `<div class="px-2.5 py-1 bg-brand-surface2 border-b border-brand-line font-semibold text-[11px] text-brand-muted">Table: <span class="text-brand-text">${escapeHtml(tableName)}</span></div>`;
+  }
+  tableHtml += `<div class="overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="bg-brand-surface2/60 border-b border-brand-line text-brand-muted"><tr>`;
+  for (const col of cols) {
+    tableHtml += `<th class="px-2.5 py-1 font-semibold">${escapeHtml(col)}</th>`;
+  }
+  tableHtml += `</tr></thead>`;
+  if (rows && rows.length > 0) {
+    tableHtml += `<tbody class="divide-y divide-brand-line text-brand-text">`;
+    for (const row of rows) {
+      tableHtml += `<tr>`;
+      for (const col of cols) {
+        tableHtml += `<td class="px-2.5 py-1 whitespace-nowrap">${escapeHtml(String(row[col] ?? ''))}</td>`;
+      }
+      tableHtml += `</tr>`;
+    }
+    tableHtml += `</tbody>`;
+  } else {
+    tableHtml += `<tbody class="text-brand-muted"><tr><td colspan="${cols.length}" class="px-2.5 py-2 text-center text-xs">(0 rows)</td></tr></tbody>`;
+  }
+  tableHtml += `</table></div></div>`;
+  return tableHtml;
+}
+
 function formatTestCaseData(val: unknown): string {
   if (val && typeof val === 'object') {
     const obj = val as Record<string, unknown>;
-    // Check if it's a table representation
+    // Check if it's a multi-table dictionary: { tables: { TableName: { columns, rows } } }
+    if (obj.tables && typeof obj.tables === 'object' && !Array.isArray(obj.tables)) {
+      const tables = obj.tables as Record<string, { columns?: string[]; rows?: Record<string, unknown>[] }>;
+      let html = '';
+      for (const [tName, tData] of Object.entries(tables)) {
+        if (tData && Array.isArray(tData.columns)) {
+          html += formatSingleTableHtml(tName, tData.columns, tData.rows || null);
+        }
+      }
+      if (html) return html;
+    }
+    // Check if it's a single table representation
     if (Array.isArray(obj.columns)) {
       const cols = obj.columns as string[];
-      const tableName = typeof obj.table === 'string' ? obj.table : null;
+      const tableName = (typeof obj.table_name === 'string' ? obj.table_name : typeof obj.table === 'string' ? obj.table : null);
       const rows = Array.isArray(obj.rows) ? (obj.rows as Record<string, unknown>[]) : null;
-
-      let tableHtml = `<div class="rounded-lg border border-brand-line overflow-hidden my-1 bg-brand-surface text-xs font-mono">`;
-      if (tableName) {
-        tableHtml += `<div class="px-2.5 py-1 bg-brand-surface2 border-b border-brand-line font-semibold text-[11px] text-brand-muted">Table: <span class="text-brand-text">${escapeHtml(tableName)}</span></div>`;
-      }
-      tableHtml += `<div class="overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="bg-brand-surface2/60 border-b border-brand-line text-brand-muted"><tr>`;
-      for (const col of cols) {
-        tableHtml += `<th class="px-2.5 py-1 font-semibold">${escapeHtml(col)}</th>`;
-      }
-      tableHtml += `</tr></thead>`;
-      if (rows && rows.length > 0) {
-        tableHtml += `<tbody class="divide-y divide-brand-line text-brand-text">`;
-        for (const row of rows) {
-          tableHtml += `<tr>`;
-          for (const col of cols) {
-            tableHtml += `<td class="px-2.5 py-1 whitespace-nowrap">${escapeHtml(String(row[col] ?? ''))}</td>`;
-          }
-          tableHtml += `</tr>`;
-        }
-        tableHtml += `</tbody>`;
-      }
-      tableHtml += `</table></div></div>`;
-      return tableHtml;
+      return formatSingleTableHtml(tableName, cols, rows);
     }
     return `<input readonly class="w-full bg-brand-surface border border-brand-line rounded-lg px-3 py-1.5 text-xs font-mono text-brand-text outline-none" value="${escapeHtml(JSON.stringify(val))}">`;
   }
@@ -120,10 +137,12 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   const backLabel = planId ? 'Study Plan' : 'Code Library';
 
   // UI state
-  type LeftTabType = 'desc' | 'subs';
+  type LeftTabType = 'desc' | 'subs' | 'pending' | 'detail';
   type ConsoleTabType = 'testcase' | 'result';
   let currentLeftTab: LeftTabType = 'desc';
   let currentConsoleTab: ConsoleTabType = 'testcase';
+  let selectedSubmission: SubmissionItem | null = null;
+  let pendingSubmittedCode = '';
   const isLTab = (tab: LeftTabType): boolean => (currentLeftTab as string) === tab;
   const isCTab = (tab: ConsoleTabType): boolean => (currentConsoleTab as string) === tab;
   let hasRun = false;
@@ -142,8 +161,17 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   splitY = Math.min(Math.max(splitY, 25), 80);
 
   const localCodeKey = `again_code_${problem.id}`;
-  const starter = problem.starterCode || problem.starter_code || '';
+  const starter = problem.starterCode || problem.starter_code || '-- Write your PostgreSQL query statement below\n';
   let userCode = localStorage.getItem(localCodeKey) || starter;
+  // Normalize legacy boilerplate to clean comment starter
+  if (userCode.includes('-- Write your SQL query below\nSELECT')) {
+    userCode = starter;
+    try {
+      localStorage.setItem(localCodeKey, starter);
+    } catch {
+      // ignore
+    }
+  }
 
   function renderTestCaseBox(): string {
     if (customInputActive) {
@@ -190,6 +218,38 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       `;
   }
 
+  function renderLeftPanelTabs(): string {
+    let tabsHtml = `
+      <button type="button" id="tab-btn-desc" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('desc') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="desc">
+        ${icon('doc', 13)} Description
+      </button>
+      <button type="button" id="tab-btn-subs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('subs') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="subs">
+        ${icon('activity', 13)} Submissions
+      </button>
+    `;
+
+    if (currentLeftTab === 'pending') {
+      tabsHtml += `
+        <button type="button" id="tab-btn-pending" class="active flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-surface text-brand-text shadow-xs cursor-pointer" data-ltab="pending">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          Pending...
+        </button>
+      `;
+    } else if (currentLeftTab === 'detail') {
+      const isAcc = selectedSubmission?.status === 'Accepted';
+      const label = selectedSubmission?.status || 'Detail';
+      tabsHtml += `
+        <button type="button" id="tab-btn-detail" class="active flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-surface text-brand-text shadow-xs cursor-pointer" data-ltab="detail">
+          <span class="w-1.5 h-1.5 rounded-full ${isAcc ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+          ${escapeHtml(label)}
+          <span class="text-brand-muted hover:text-brand-text ml-1" id="close-sub-detail-btn" title="Close details">&times;</span>
+        </button>
+      `;
+    }
+
+    return tabsHtml;
+  }
+
   function renderLeftTabBody(): string {
     if (currentLeftTab === 'desc') {
       const descMarkdown = problem?.descriptionMarkdown || problem?.description_md || '';
@@ -212,6 +272,88 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       `;
     }
 
+    if (currentLeftTab === 'pending') {
+      return `
+        <div class="flex flex-col gap-4 font-sans" id="submission-pending-view">
+          <div class="flex items-center justify-between pb-3 border-b border-brand-line">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <h3 class="text-base font-bold text-brand-text">Pending...</h3>
+              </div>
+              <small class="text-brand-muted text-xs">Submitted just now</small>
+            </div>
+          </div>
+          <div class="p-4 rounded-xl bg-brand-surface2 border border-brand-line text-xs font-mono text-brand-text flex items-center gap-3">
+            <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
+            <span>Preparing runtime environment & executing in sandbox...</span>
+          </div>
+          <div class="mt-2">
+            <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 font-sans">Code | ${escapeHtml(problem?.language || '')}</div>
+            <pre class="p-3.5 rounded-xl bg-[#081120] text-[#e6ecf5] font-mono text-xs overflow-x-auto leading-relaxed border border-[#1b2740]">${escapeHtml(pendingSubmittedCode || userCode)}</pre>
+          </div>
+        </div>
+      `;
+    }
+
+    if (currentLeftTab === 'detail') {
+      const isAccepted = selectedSubmission?.status === 'Accepted';
+      const runtimeVal = selectedSubmission?.runtime_ms ?? selectedSubmission?.runtimeMs ?? selectedSubmission?.executionTimeMs ?? 0;
+      const codeVal = selectedSubmission?.submitted_code ?? selectedSubmission?.submittedCode ?? selectedSubmission?.code ?? userCode;
+      const dateVal = selectedSubmission?.created_at ?? selectedSubmission?.createdAt ?? 'Just now';
+      const langVal = selectedSubmission?.language ?? problem?.language ?? 'SQL';
+
+      return `
+        <div class="flex flex-col gap-4 font-sans" id="submission-detail-view">
+          <div class="flex items-center justify-between pb-3 border-b border-brand-line">
+            <button type="button" class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-muted hover:text-brand-text transition-colors cursor-pointer" id="back-to-subs-btn">
+              ${icon('left', 13)} All Submissions
+            </button>
+            <button type="button" class="text-brand-muted hover:text-brand-text p-1 rounded hover:bg-brand-surface text-sm cursor-pointer" id="detail-close-btn" title="Back to Description">
+              &times;
+            </button>
+          </div>
+
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xl font-bold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}" id="submission-detail-title">
+                ${escapeHtml(selectedSubmission?.status || 'Submitted')}
+              </span>
+            </div>
+            <span class="text-xs text-brand-muted" id="submission-detail-date">${escapeHtml(dateVal)}</span>
+          </div>
+
+          <!-- Metric Box -->
+          <div class="p-4 rounded-xl bg-brand-surface2 border border-brand-line flex items-center gap-6">
+            <div>
+              <div class="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Runtime</div>
+              <div class="text-lg font-mono font-bold text-brand-text mt-0.5" id="submission-detail-runtime">
+                ${runtimeVal} ms
+              </div>
+            </div>
+            <div class="h-8 w-px bg-brand-line"></div>
+            <div>
+              <div class="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Testcases</div>
+              <div class="text-sm font-semibold text-brand-text mt-0.5" id="submission-detail-cases">
+                ${isAccepted ? 'All testcases passed' : 'Wrong Answer'}
+              </div>
+            </div>
+            <div class="h-8 w-px bg-brand-line"></div>
+            <div>
+              <div class="text-[11px] font-semibold text-brand-muted uppercase tracking-wider">Language</div>
+              <div class="text-sm font-semibold text-brand-text mt-0.5">${escapeHtml(langVal)}</div>
+            </div>
+          </div>
+
+          <!-- Submitted Code Snippet -->
+          <div class="mt-2">
+            <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 font-sans">Code | ${escapeHtml(langVal)}</div>
+            <pre class="p-3.5 rounded-xl bg-[#081120] text-[#e6ecf5] font-mono text-xs overflow-x-auto leading-relaxed border border-[#1b2740]" id="submission-detail-code">${escapeHtml(codeVal)}</pre>
+          </div>
+        </div>
+      `;
+    }
+
     // Submissions tab
     if (!submissions.length) {
       return `<p class="text-brand-muted py-8 text-center text-sm">No submissions recorded yet. Write your query and click Submit.</p>`;
@@ -230,14 +372,16 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
           </thead>
           <tbody class="divide-y divide-brand-line">
             ${submissions
-              .map((s) => {
+              .map((s, idx) => {
                 const isAccepted = s.status === 'Accepted';
+                const runMs = s.runtime_ms ?? s.runtimeMs ?? s.executionTimeMs ?? 0;
+                const dateStr = s.created_at ?? s.createdAt ?? 'Recent';
                 return `
-                  <tr class="hover:bg-brand-surface2/50 transition-colors">
-                    <td class="p-3 font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(s.status)}</td>
+                  <tr class="sub-row hover:bg-brand-surface2/50 transition-colors cursor-pointer group" data-sub-idx="${idx}" title="Click to view submission details">
+                    <td class="p-3 font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'} group-hover:underline">${escapeHtml(s.status)}</td>
                     <td class="p-3">${escapeHtml(s.language)}</td>
-                    <td class="p-3 font-mono">${s.executionTimeMs} ms</td>
-                    <td class="p-3 text-brand-muted">${escapeHtml(s.createdAt)}</td>
+                    <td class="p-3 font-mono">${runMs} ms</td>
+                    <td class="p-3 text-brand-muted">${escapeHtml(dateStr)}</td>
                   </tr>
                 `;
               })
@@ -249,7 +393,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   }
 
   const workbenchHtml = `
-    <div class="prob flex-1 flex flex-col h-full min-h-0 overflow-hidden w-full">
+    <div class="prob flex-1 flex flex-col h-full max-h-full min-h-0 overflow-hidden w-full">
       <!-- Breadcrumb Bar -->
       <div class="prob-top h-10 flex-none flex items-center justify-between px-3 sm:px-4 bg-brand-surface border-b border-brand-line text-xs gap-3">
         <div class="crumbs flex items-center gap-2 text-brand-muted text-xs truncate">
@@ -266,22 +410,17 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       </div>
 
       <!-- Bento Workspace Canvas -->
-      <div class="bento-workspace flex-1 flex p-2 gap-2 min-h-0 overflow-hidden bg-brand-bg select-none-during-drag" id="bento-workspace">
+      <div class="bento-workspace flex-1 flex p-2 gap-2 min-h-0 h-full max-h-full overflow-hidden bg-brand-bg select-none-during-drag" id="bento-workspace">
         
         <!-- Left Panel: Problem Card -->
-        <section id="bento-left" class="flex flex-col min-w-[280px] max-w-[80%] rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden" style="width: ${splitX}%;">
+        <section id="bento-left" class="flex flex-col min-w-[280px] max-w-[80%] h-full max-h-full min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden shrink-0" style="width: ${splitX}%;">
           <!-- Header Tabs -->
           <div class="h-10 flex items-center border-b border-brand-line px-3 bg-brand-surface2/50 shrink-0 gap-1" id="left-panel-tabs">
-            <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('desc') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="desc">
-              ${icon('doc', 13)} Description
-            </button>
-            <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('subs') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'}" data-ltab="subs">
-              ${icon('activity', 13)} Submissions
-            </button>
+            ${renderLeftPanelTabs()}
           </div>
 
           <!-- Body Content -->
-          <div class="flex-1 p-5 overflow-y-auto" id="left-card-body">
+          <div class="flex-1 min-h-0 p-5 overflow-y-auto scrollbar-thin" id="left-card-body">
             ${renderLeftTabBody()}
           </div>
         </section>
@@ -292,10 +431,10 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
         </div>
 
         <!-- Right Stack: Editor & Console -->
-        <section id="bento-right" class="flex-1 flex flex-col min-w-[320px] min-h-0 gap-2 overflow-hidden">
+        <section id="bento-right" class="flex-1 flex flex-col min-w-[320px] min-h-0 h-full max-h-full gap-2 overflow-hidden">
           
           <!-- Right Top Card: Code Editor -->
-          <div id="bento-editor-card" class="flex flex-col min-h-[160px] max-h-[85%] rounded-xl border border-brand-line bg-[#081120] shadow-xs overflow-hidden" style="height: ${splitY}%;">
+          <div id="bento-editor-card" class="flex flex-col min-h-[140px] max-h-[85%] rounded-xl border border-brand-line bg-[#081120] shadow-xs overflow-hidden shrink-0" style="height: ${splitY}%;">
             <!-- Editor Top Bar -->
             <div class="h-10 flex-none flex items-center justify-between px-3 text-xs bg-[#0c1626] border-b border-[#1b2740] gap-2">
               <div class="flex items-center gap-2">
@@ -330,7 +469,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
               <div class="gut shrink-0 select-none py-3 px-2.5 text-right font-mono text-xs leading-relaxed whitespace-pre min-w-[2.5rem] text-[#4a5873] border-r border-[#1b2740] bg-[#081120] overflow-hidden" id="code-gutter" aria-hidden="true"></div>
               <div class="code flex-1 relative overflow-hidden">
                 <pre id="code-highlight" class="absolute inset-0 p-3 m-0 overflow-hidden pointer-events-none font-mono text-xs leading-relaxed text-[#e6ecf5]" aria-hidden="true"></pre>
-                <textarea id="code-textarea" class="absolute inset-0 p-3 m-0 w-full h-full bg-transparent resize-none border-0 outline-none font-mono text-xs leading-relaxed caret-emerald-400" style="-webkit-text-fill-color: transparent !important; color: transparent !important;" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
+                <textarea id="code-textarea" class="absolute inset-0 p-3 m-0 w-full h-full bg-transparent resize-none border-0 outline-none font-mono text-xs leading-relaxed caret-emerald-400 scrollbar-thin" style="-webkit-text-fill-color: transparent !important; color: transparent !important;" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
               </div>
             </div>
 
@@ -349,7 +488,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
           </div>
 
           <!-- Right Bottom Card: Testcase & Console -->
-          <div id="bento-console-card" class="flex-1 flex flex-col min-h-[140px] rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden">
+          <div id="bento-console-card" class="flex-1 flex flex-col min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden">
             <!-- Console Top Bar -->
             <div class="h-10 flex-none flex items-center justify-between px-3 border-b border-brand-line bg-brand-surface2/50 text-xs">
               <div class="flex items-center gap-1" id="console-tabs-bar">
@@ -367,7 +506,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
             </div>
 
             <!-- Console Body -->
-            <div class="flex-1 min-h-0 overflow-y-auto p-4 font-mono text-xs" id="console-card-body">
+            <div class="flex-1 min-h-0 overflow-y-auto p-4 font-mono text-xs scrollbar-thin" id="console-card-body">
               <!-- Content rendered dynamically based on active console tab -->
             </div>
           </div>
@@ -386,7 +525,6 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   const cursorPosEl = container.querySelector('#editor-cursor-pos') as HTMLElement | null;
   const consoleBody = container.querySelector('#console-card-body') as HTMLElement | null;
   const consoleStatus = container.querySelector('#console-status-label') as HTMLElement | null;
-  const leftCardBody = container.querySelector('#left-card-body') as HTMLElement | null;
 
   let lastConsoleOutputHtml = '';
 
@@ -415,7 +553,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
         `;
       } else {
         consoleBody.innerHTML = `
-          <pre id="console-output-pre" class="h-full p-1 m-0 overflow-y-auto text-brand-text text-xs font-mono whitespace-pre-wrap leading-relaxed">${lastConsoleOutputHtml}</pre>
+          <div id="console-output-pre" class="h-full overflow-y-auto text-brand-text text-xs font-mono">${lastConsoleOutputHtml}</div>
         `;
       }
     }
@@ -474,25 +612,69 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     updateCursorPos();
   }
 
-  // Left panel tabs click
-  const leftTabsBar = container.querySelector('#left-panel-tabs');
-  if (leftTabsBar && leftCardBody) {
-    leftTabsBar.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-ltab]') as HTMLButtonElement | null;
-      if (btn && btn.dataset.ltab) {
-        currentLeftTab = btn.dataset.ltab as typeof currentLeftTab;
-        // Update tab buttons active classes
-        leftTabsBar.querySelectorAll('[data-ltab]').forEach((b) => {
-          const el = b as HTMLElement;
-          const isActive = el.dataset.ltab === currentLeftTab;
-          el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
-          }`;
-        });
-        leftCardBody.innerHTML = renderLeftTabBody();
+  function updateLeftPanel(): void {
+    const tabsBar = container.querySelector('#left-panel-tabs');
+    const bodyEl = container.querySelector('#left-card-body');
+    if (tabsBar) {
+      tabsBar.innerHTML = renderLeftPanelTabs();
+    }
+    if (bodyEl) {
+      bodyEl.innerHTML = renderLeftTabBody();
+    }
+    wireLeftTabEvents();
+  }
+
+  function wireLeftTabEvents(): void {
+    const tabsBar = container.querySelector('#left-panel-tabs');
+    if (tabsBar) {
+      tabsBar.querySelectorAll<HTMLElement>('[data-ltab]').forEach((btn) => {
+        btn.onclick = (e) => {
+          const target = (e.target as HTMLElement).closest('[data-ltab]') as HTMLElement | null;
+          if (target && target.dataset.ltab) {
+            currentLeftTab = target.dataset.ltab as LeftTabType;
+            updateLeftPanel();
+          }
+        };
+      });
+
+      const closeDetailBtn = container.querySelector('#close-sub-detail-btn');
+      if (closeDetailBtn) {
+        (closeDetailBtn as HTMLElement).onclick = (e) => {
+          e.stopPropagation();
+          currentLeftTab = 'subs';
+          updateLeftPanel();
+        };
       }
+    }
+
+    const backToSubs = container.querySelector('#back-to-subs-btn');
+    if (backToSubs) {
+      (backToSubs as HTMLElement).onclick = () => {
+        currentLeftTab = 'subs';
+        updateLeftPanel();
+      };
+    }
+
+    const detailCloseBtn = container.querySelector('#detail-close-btn');
+    if (detailCloseBtn) {
+      (detailCloseBtn as HTMLElement).onclick = () => {
+        currentLeftTab = 'desc';
+        updateLeftPanel();
+      };
+    }
+
+    const subRows = container.querySelectorAll<HTMLElement>('[data-sub-idx]');
+    subRows.forEach((row) => {
+      row.onclick = () => {
+        const idx = parseInt(row.dataset.subIdx || '0', 10);
+        selectedSubmission = submissions[idx] || null;
+        currentLeftTab = 'detail';
+        updateLeftPanel();
+      };
     });
   }
+
+  wireLeftTabEvents();
 
   // Console panel tabs click
   const consoleTabsBar = container.querySelector('#console-tabs-bar');
@@ -623,18 +805,32 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
 
   // Execute Code Logic
   async function executeCode(isSubmission: boolean): Promise<void> {
-    hasRun = true;
-    currentConsoleTab = 'result';
+    if (isSubmission) {
+      pendingSubmittedCode = userCode;
+      currentLeftTab = 'pending';
+      updateLeftPanel();
+    } else {
+      hasRun = true;
+      currentConsoleTab = 'result';
 
-    // Switch console tab to result in UI
-    if (consoleTabsBar) {
-      consoleTabsBar.querySelectorAll('[data-ctab]').forEach((b) => {
-        const el = b as HTMLElement;
-        const isActive = el.dataset.ctab === 'result';
-        el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-          isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
-        }`;
-      });
+      // Switch console tab to result in UI
+      if (consoleTabsBar) {
+        consoleTabsBar.querySelectorAll('[data-ctab]').forEach((b) => {
+          const el = b as HTMLElement;
+          const isActive = el.dataset.ctab === 'result';
+          el.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            isActive ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+          }`;
+        });
+      }
+
+      if (consoleStatus) {
+        consoleStatus.textContent = 'Running...';
+        consoleStatus.className = 'text-xs font-mono text-amber-500';
+      }
+
+      lastConsoleOutputHtml = '<span class="text-brand-muted">Executing in sandbox environment...</span>';
+      renderConsoleBody();
     }
 
     const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
@@ -642,13 +838,6 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       statusPill.textContent = 'RUNNING';
       statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400';
     }
-    if (consoleStatus) {
-      consoleStatus.textContent = 'Running...';
-      consoleStatus.className = 'text-xs font-mono text-amber-500';
-    }
-
-    lastConsoleOutputHtml = '<span class="text-brand-muted">Executing in sandbox environment...</span>';
-    renderConsoleBody();
 
     try {
       if (isSql) {
@@ -664,12 +853,27 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
         statusPill.textContent = 'ERROR';
         statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400';
       }
-      if (consoleStatus) {
-        consoleStatus.textContent = 'Execution Error';
-        consoleStatus.className = 'text-xs font-mono text-rose-500';
+      if (isSubmission) {
+        selectedSubmission = {
+          id: `err_${Date.now()}`,
+          problemId,
+          language: isSql ? 'PostgreSQL' : 'Python 3',
+          status: 'Runtime Error',
+          runtime_ms: 0,
+          submitted_code: userCode,
+          created_at: new Date().toLocaleTimeString(),
+        };
+        currentLeftTab = 'detail';
+        updateLeftPanel();
+        showToast(`Submission error: ${msg}`);
+      } else {
+        if (consoleStatus) {
+          consoleStatus.textContent = 'Execution Error';
+          consoleStatus.className = 'text-xs font-mono text-rose-500';
+        }
+        lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(msg)}</span>`;
+        renderConsoleBody();
       }
-      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(msg)}</span>`;
-      renderConsoleBody();
     }
   }
 
@@ -692,47 +896,70 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     const passedCount = res.passedCount ?? res.passed_count ?? 0;
     const isAccepted = res.passed && res.status === 'Accepted';
 
-    if (isAccepted) {
-      if (consoleStatus) {
-        consoleStatus.textContent = `Passed (${ms}ms)`;
-        consoleStatus.className = 'text-xs font-mono text-emerald-500 font-semibold';
-      }
-      lastConsoleOutputHtml = `stdout:\n${escapeHtml(res.output)}\n<span class="text-emerald-500 font-semibold">Passed: All ${total} test cases passed.</span>`;
-      renderConsoleBody();
+    if (isSubmission) {
+      selectedSubmission = {
+        id: `sub_${Date.now()}`,
+        problemId,
+        language: 'Python 3',
+        status: res.status,
+        runtime_ms: ms,
+        submitted_code: userCode,
+        created_at: new Date().toLocaleTimeString(),
+      };
+      submissions = [selectedSubmission, ...submissions];
+      currentLeftTab = 'detail';
+      updateLeftPanel();
 
-      if (isSubmission) {
+      if (isAccepted) {
         markProblemSolved(problemId);
-        showToast('Accepted. Marked as solved.', 'Next problem', () => {
-          if (problem?.planId) {
-            navigate(`#/plans/${encodeURIComponent(problem.planId)}`);
-          } else {
-            navigate('#/code');
-          }
-        });
+        showToast('Accepted. All test cases passed.');
+      } else {
+        showToast('Wrong answer. Check submission details.');
       }
-    } else {
-      if (consoleStatus) {
-        consoleStatus.textContent = `${res.status} (${ms}ms)`;
-        consoleStatus.className = 'text-xs font-mono text-rose-500 font-semibold';
-      }
-      const errDetail = res.error ? `\n${escapeHtml(res.error)}` : '';
-      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(res.status)}: ${passedCount}/${total} test cases passed.${errDetail}</span>\n${escapeHtml(res.output)}`;
-      renderConsoleBody();
 
-      if (isSubmission) {
-        showToast('Wrong answer. Check test results for details.');
-      }
+      getProblemSubmissions(problemId)
+        .then((updated) => {
+          submissions = updated;
+        })
+        .catch(() => {});
+      return;
     }
 
-    getProblemSubmissions(problemId)
-      .then((updated) => {
-        submissions = updated;
-      })
-      .catch(() => {});
+    // Run action -> output to Test Result console
+    if (consoleStatus) {
+      consoleStatus.textContent = `${res.status} (${ms}ms)`;
+      consoleStatus.className = `text-xs font-mono font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}`;
+    }
+
+    const errDetail = res.error ? `\n\nError: ${escapeHtml(res.error)}` : '';
+    lastConsoleOutputHtml = `
+      <div class="flex flex-col gap-3 font-mono text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sm ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(res.status)}</span>
+          <span class="text-xs text-brand-muted">Runtime: ${ms} ms (${passedCount}/${total} test cases passed)</span>
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Output</div>
+          <pre class="p-3 rounded-xl bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-relaxed whitespace-pre">${escapeHtml(res.output || '(No stdout)')}${errDetail}</pre>
+        </div>
+      </div>
+    `;
+    renderConsoleBody();
   }
 
   function handleSqlResult(
-    res: { passed: boolean; status: string; columns?: string[]; rows?: unknown[][]; durationMs?: number; duration_ms?: number; runtime_ms?: number; diff?: string | null; error?: string | null },
+    res: {
+      passed: boolean;
+      status: string;
+      columns?: string[];
+      rows?: unknown[];
+      expected_rows?: Record<string, unknown>[];
+      durationMs?: number;
+      duration_ms?: number;
+      runtime_ms?: number;
+      diff?: string | null;
+      error?: string | null;
+    },
     isSubmission: boolean
   ): void {
     const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
@@ -746,48 +973,128 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     }
 
     const ms = res.durationMs ?? res.duration_ms ?? res.runtime_ms ?? 0;
-    const rowCount = res.rows ? res.rows.length : 0;
-    const cols = res.columns ? res.columns.join(' | ') : '';
-    const tableRows = res.rows
-      ? res.rows
-          .slice(0, 5)
-          .map((r) => (Array.isArray(r) ? r.join(' | ') : JSON.stringify(r)))
-          .join('\n')
-      : '';
     const isAccepted = res.passed && res.status === 'Accepted';
 
-    if (isAccepted) {
-      if (consoleStatus) {
-        consoleStatus.textContent = `Passed (${ms}ms)`;
-        consoleStatus.className = 'text-xs font-mono text-emerald-500 font-semibold';
-      }
-      lastConsoleOutputHtml = `<span class="text-emerald-500 font-semibold">Matched canonical output dataset (${rowCount} rows).</span>\n${escapeHtml(cols)}\n${escapeHtml(tableRows)}`;
-      renderConsoleBody();
+    if (isSubmission) {
+      selectedSubmission = {
+        id: `sub_${Date.now()}`,
+        problemId,
+        language: 'PostgreSQL',
+        status: res.status,
+        runtime_ms: ms,
+        submitted_code: userCode,
+        created_at: new Date().toLocaleTimeString(),
+      };
+      submissions = [selectedSubmission, ...submissions];
+      currentLeftTab = 'detail';
+      updateLeftPanel();
 
-      if (isSubmission) {
+      if (isAccepted) {
         markProblemSolved(problemId);
         showToast('Accepted. Query matches canonical solution.');
+      } else {
+        showToast(res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match expected dataset.' : 'Execution failed.');
       }
-    } else {
-      if (consoleStatus) {
-        consoleStatus.textContent = `${res.status} (${ms}ms)`;
-        consoleStatus.className = 'text-xs font-mono text-rose-500 font-semibold';
-      }
-      const errText = res.error ? `\nError: ${escapeHtml(res.error)}` : '';
-      const diffDetail = res.diff ? `\nDiff: ${escapeHtml(res.diff)}` : '';
-      lastConsoleOutputHtml = `<span class="text-rose-500 font-semibold">${escapeHtml(res.status)}</span>${errText}${diffDetail}`;
-      renderConsoleBody();
 
-      if (isSubmission) {
-        showToast(res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match canonical output.' : 'Execution failed.');
+      getProblemSubmissions(problemId)
+        .then((updated) => {
+          submissions = updated;
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Run action -> formatted ASCII tables in console
+    if (consoleStatus) {
+      consoleStatus.textContent = `${res.status} (${ms}ms)`;
+      consoleStatus.className = `text-xs font-mono font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}`;
+    }
+
+    const tc = casesList[activeCaseIdx];
+    let inputTable = '';
+    if (tc) {
+      const tcInp = tc.inputData !== undefined ? tc.inputData : tc.input;
+      if (tcInp && typeof tcInp === 'object') {
+        const inpObj = tcInp as Record<string, unknown>;
+        if (inpObj.tables && typeof inpObj.tables === 'object' && !Array.isArray(inpObj.tables)) {
+          const tableParts: string[] = [];
+          for (const [tName, tData] of Object.entries(inpObj.tables as Record<string, { columns: string[]; rows: (Record<string, unknown> | unknown[])[] }>)) {
+            if (tData && Array.isArray(tData.columns)) {
+              tableParts.push(`Table: ${tName}\n` + formatAsciiTable(tData.columns, tData.rows || []));
+            }
+          }
+          inputTable = tableParts.join('\n\n');
+        } else if (Array.isArray(inpObj.columns)) {
+          const tName = typeof inpObj.table_name === 'string' ? `Table: ${inpObj.table_name}\n` : '';
+          const rowsList = (inpObj.rows as (Record<string, unknown> | unknown[])[]) || [];
+          inputTable = tName + formatAsciiTable(inpObj.columns as string[], rowsList);
+        } else {
+          inputTable = JSON.stringify(tcInp, null, 2);
+        }
+      } else if (typeof tcInp === 'string') {
+        inputTable = tcInp;
       }
     }
 
-    getProblemSubmissions(problemId)
-      .then((updated) => {
-        submissions = updated;
-      })
-      .catch(() => {});
+    const userRows = (res.rows || []) as (Record<string, unknown> | unknown[])[];
+    const outputTable = res.columns && res.columns.length > 0
+      ? formatAsciiTable(res.columns, userRows)
+      : '(No rows returned)';
+
+    let expectedTable = '';
+    if (res.expected_rows && Array.isArray(res.expected_rows) && res.expected_rows.length > 0) {
+      const expCols = Object.keys(res.expected_rows[0]);
+      expectedTable = formatAsciiTable(expCols, res.expected_rows);
+    } else if (tc) {
+      const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
+      if (tcOut && typeof tcOut === 'object' && Array.isArray((tcOut as any).columns)) {
+        expectedTable = formatAsciiTable((tcOut as any).columns, (tcOut as any).rows || []);
+      } else if (typeof tcOut === 'string') {
+        expectedTable = tcOut;
+      } else if (tcOut) {
+        expectedTable = JSON.stringify(tcOut, null, 2);
+      }
+    }
+
+    lastConsoleOutputHtml = `
+      <div class="flex flex-col gap-2.5 font-mono text-xs">
+        <div class="flex items-center justify-between pb-1.5 border-b border-brand-line">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(res.status)}</span>
+            <span class="text-xs text-brand-muted">Runtime: ${ms} ms</span>
+          </div>
+        </div>
+
+        ${inputTable ? `
+        <div>
+          <div class="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Input</div>
+          <pre class="p-2 rounded-lg bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-snug whitespace-pre m-0">${escapeHtml(inputTable)}</pre>
+        </div>` : ''}
+
+        <div>
+          <div class="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Output</div>
+          <pre class="p-2 rounded-lg bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-snug whitespace-pre m-0">${escapeHtml(outputTable)}</pre>
+        </div>
+
+        ${expectedTable ? `
+        <div>
+          <div class="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Expected</div>
+          <pre class="p-2 rounded-lg bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-snug whitespace-pre m-0">${escapeHtml(expectedTable)}</pre>
+        </div>` : ''}
+
+        ${res.diff ? `
+        <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs">
+          ${escapeHtml(res.diff)}
+        </div>` : ''}
+
+        ${res.error ? `
+        <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-mono">
+          ${escapeHtml(res.error)}
+        </div>` : ''}
+      </div>
+    `;
+
+    renderConsoleBody();
   }
 
   // Run & Submit button listeners
