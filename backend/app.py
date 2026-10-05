@@ -13,9 +13,9 @@ from backend.routes.quiz import router as quiz_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initializes tables and seeds canonical data on startup."""
+    """Initializes tables and seeds canonical data on startup non-destructively."""
     init_db()
-    seed_db()
+    seed_db(reset_coding=False)
     yield
 
 
