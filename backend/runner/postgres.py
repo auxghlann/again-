@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from decimal import Decimal
 import time
 from typing import Any, Dict, List, Optional
@@ -31,9 +32,14 @@ def check_postgres_connection() -> bool:
 
 
 def _normalize_cell(val: Any) -> Any:
-    """Normalizes cell values across Decimal, float, int, and string types."""
+    """Normalizes cell values across Decimal, float, int, date, and string types."""
     if val is None:
         return None
+    # Temporal values arrive as date/datetime objects from psycopg2 but are stored
+    # as ISO-8601 strings in test-case fixtures, so both sides must collapse to ISO.
+    # datetime is a subclass of date, so this covers both.
+    if isinstance(val, (date, datetime)):
+        return val.isoformat()
     if isinstance(val, (int, float, Decimal)):
         return round(float(val), 6)
     if isinstance(val, str):

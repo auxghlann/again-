@@ -1,8 +1,30 @@
+from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
+
 import psycopg2
 
-from backend.runner.postgres import check_postgres_connection, run_sql_sandbox
+from backend.runner.postgres import (
+    _normalize_cell,
+    check_postgres_connection,
+    run_sql_sandbox,
+)
 from backend.runner.python import run_python_sandbox
+
+
+def test_normalize_cell_collapses_temporal_types_to_iso():
+    """DATE/DATETIME columns must compare equal to the ISO strings stored in fixtures."""
+    assert _normalize_cell(date(2025, 1, 2)) == "2025-01-02"
+    assert _normalize_cell(datetime(2025, 1, 2, 3, 4, 5)) == "2025-01-02T03:04:05"
+    # A string that is already ISO must stay byte-identical to the date rendering.
+    assert _normalize_cell("2025-01-02") == "2025-01-02"
+
+
+def test_normalize_cell_still_rounds_numbers_and_trims_strings():
+    assert _normalize_cell(Decimal("55.00")) == 55.0
+    assert _normalize_cell(3) == 3.0
+    assert _normalize_cell("  Alice Park  ") == "Alice Park"
+    assert _normalize_cell(None) is None
 
 
 def test_python_runner_success():

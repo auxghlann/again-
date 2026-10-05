@@ -320,9 +320,9 @@ def test_seed_db_idempotency(db_session: Session):
     res1 = seed_db(db_session, reset_coding=False)
     assert res1["topics"] == 20
     assert res1["questions"] == 80
-    assert res1["plans"] == 3
-    assert res1["problems"] == 15
-    assert res1["test_cases"] == 15
+    assert res1["plans"] == 4
+    assert res1["problems"] == 20
+    assert res1["test_cases"] == 20
 
     res2 = seed_db(db_session, reset_coding=False)
     assert res2["topics"] == 0

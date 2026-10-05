@@ -1,31 +1,62 @@
-import { getState, toggleSidebar, toggleTheme } from '../state';
+import { getState, toggleSidebar } from '../state';
 import { escapeHtml, icon } from './icons';
-import { showToast } from './toast';
+import { openSettingsModal } from './settingsModal';
 import { navigate } from '../router';
+import type { BreadcrumbInput } from '../types';
 
-export function renderTopbar(crumbs: string[]): string {
+export type { BreadcrumbInput, BreadcrumbItem } from '../types';
+
+const CANONICAL_BREADCRUMB_ROUTES: Record<string, string> = {
+  'practice library': '#/practice',
+  'practice': '#/practice',
+  'code library': '#/code',
+  'code': '#/code',
+  'all study plans': '#/code',
+  'all topics': '#/practice',
+  'dashboard': '#/dashboard',
+  'home': '#/dashboard',
+  'my activity': '#/activity',
+  'activity': '#/activity',
+  'resources': '#/resources',
+  'learn': '#/resources',
+};
+
+export function renderTopbar(crumbs: BreadcrumbInput[]): string {
   const renderedCrumbs = crumbs
     .map((crumb, idx) => {
       const isLast = idx === crumbs.length - 1;
-      return isLast
-        ? `<b class="text-brand-text font-semibold">${escapeHtml(crumb)}</b>`
-        : `<span class="hover:text-brand-text transition-colors">${escapeHtml(crumb)}</span><span class="text-brand-muted/50">/</span>`;
+      const label = typeof crumb === 'string' ? crumb : crumb.label;
+      const explicitHref = typeof crumb === 'object' ? crumb.href : undefined;
+      const resolvedHref = explicitHref || CANONICAL_BREADCRUMB_ROUTES[label.toLowerCase().trim()];
+
+      if (isLast) {
+        return `
+          <li class="flex items-center min-w-0">
+            <b class="text-brand-text font-semibold truncate" aria-current="page">${escapeHtml(label)}</b>
+          </li>
+        `;
+      }
+
+      const content = resolvedHref
+        ? `<a href="${resolvedHref}" class="crumb-link hover:text-brand-text hover:underline transition-colors focus:outline-hidden focus-visible:ring-1 focus-visible:ring-emerald-500 rounded px-0.5 truncate" data-nav-crumb>${escapeHtml(label)}</a>`
+        : `<span class="hover:text-brand-text transition-colors truncate">${escapeHtml(label)}</span>`;
+
+      return `
+        <li class="flex items-center gap-2 min-w-0">
+          ${content}
+          <span class="text-brand-muted/40 select-none shrink-0" aria-hidden="true">/</span>
+        </li>
+      `;
     })
     .join('');
 
-  const isConnected = getState().backendConnected;
-  const statusDotClass = isConnected
-    ? 'w-2 h-2 rounded-full inline-block bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
-    : 'w-2 h-2 rounded-full inline-block bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
-  const statusLabel = isConnected ? 'API Online' : 'API Offline';
-
   return `
-    <header class="topbar w-full h-12 flex-none flex items-center px-6 bg-brand-surface border-b border-brand-line text-xs text-brand-muted gap-2 shrink-0">
-      ${renderedCrumbs}
-      <div class="ml-auto flex items-center gap-2">
-        <span class="${statusDotClass}" id="shell-status-dot"></span>
-        <span id="shell-status-label" class="text-[11px] font-medium">${statusLabel}</span>
-      </div>
+    <header class="topbar w-full h-12 flex-none flex items-center px-6 bg-brand-surface border-b border-brand-line text-xs text-brand-muted shrink-0">
+      <nav aria-label="Breadcrumbs" class="w-full flex items-center min-w-0">
+        <ol class="flex items-center gap-2 list-none p-0 m-0 min-w-0 truncate">
+          ${renderedCrumbs}
+        </ol>
+      </nav>
     </header>
   `;
 }
@@ -49,8 +80,6 @@ export function renderSidebar(activeNav: string): string {
     `;
   };
 
-  const currentTheme = getState().theme;
-  const themeIcon = currentTheme === 'dark' ? icon('sun', 15) : icon('moon', 15);
   const collapseIcon = isCollapsed ? icon('panelLeftOpen', 16) : icon('panelLeftClose', 16);
   const collapseTitle = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
 
@@ -61,7 +90,7 @@ export function renderSidebar(activeNav: string): string {
           <i class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></i>
           ${isCollapsed ? '' : `<span class="max-[900px]:hidden font-mono tracking-tight">again!</span>`}
         </div>
-        <button type="button" id="sidebar-collapse-btn" class="p-1.5 rounded-md text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors shrink-0" title="${collapseTitle}" aria-label="${collapseTitle}">
+        <button type="button" id="sidebar-collapse-btn" class="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer" title="${collapseTitle}" aria-label="${collapseTitle}">
           ${collapseIcon}
         </button>
       </div>
@@ -81,27 +110,21 @@ export function renderSidebar(activeNav: string): string {
           isCollapsed
             ? `
           <div class="flex flex-col items-center gap-2">
-            <div class="av w-7 h-7 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0" title="Khester">KM</div>
-            <button type="button" class="theme-btn p-1.5 rounded-md text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors" id="theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme">
-              ${themeIcon}
-            </button>
-            <button type="button" class="theme-btn p-1.5 rounded-md text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors" id="gear-btn" title="Settings" aria-label="Settings">
-              ${icon('gear', 15)}
+            <div class="av w-8 h-8 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0" title="Khester">KM</div>
+            <button type="button" class="gear-btn p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer" id="gear-btn" title="Settings" aria-label="Settings">
+              ${icon('gear', 16)}
             </button>
           </div>
         `
             : `
-          <div class="flex items-center gap-2.5 px-1.5">
-            <div class="av w-7 h-7 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0">KM</div>
+          <div class="flex items-center gap-2.5 px-1">
+            <div class="av w-8 h-8 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0">KM</div>
             <div class="max-[900px]:hidden min-w-0">
               <b class="block text-xs text-white leading-tight truncate">Khester</b>
               <small class="text-[11px] text-[#6c7b95] block truncate">Localhost Mode</small>
             </div>
-            <button type="button" class="theme-btn ml-auto p-1.5 rounded-md text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors" id="theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme">
-              ${themeIcon}
-            </button>
-            <button type="button" class="theme-btn p-1.5 rounded-md text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors ml-0.5" id="gear-btn" title="Settings" aria-label="Settings">
-              ${icon('gear', 15)}
+            <button type="button" class="gear-btn ml-auto p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer" id="gear-btn" title="Settings" aria-label="Settings">
+              ${icon('gear', 16)}
             </button>
           </div>
         `
@@ -114,7 +137,7 @@ export function renderSidebar(activeNav: string): string {
 export function renderShell(
   activeNav: string,
   contentHtml: string,
-  crumbs: string[],
+  crumbs: BreadcrumbInput[],
   extraClass = ''
 ): string {
   const isCollapsed = getState().sidebarCollapsed;
@@ -173,22 +196,26 @@ export function attachShellEvents(container: HTMLElement): void {
     };
   }
 
-  const themeBtn = container.querySelector('#theme-toggle-btn') as HTMLButtonElement | null;
-  if (themeBtn) {
-    themeBtn.onclick = () => {
-      toggleTheme();
-    };
-  }
-
   const gearBtn = container.querySelector('#gear-btn') as HTMLButtonElement | null;
   if (gearBtn) {
     gearBtn.onclick = () => {
-      showToast('Settings configuration is managed via local config');
+      openSettingsModal();
     };
   }
 
   const navLinks = container.querySelectorAll<HTMLAnchorElement>('.nav a');
   navLinks.forEach((link) => {
+    link.onclick = (e) => {
+      e.preventDefault();
+      const href = link.getAttribute('href');
+      if (href) {
+        navigate(href);
+      }
+    };
+  });
+
+  const crumbLinks = container.querySelectorAll<HTMLAnchorElement>('.topbar a.crumb-link');
+  crumbLinks.forEach((link) => {
     link.onclick = (e) => {
       e.preventDefault();
       const href = link.getAttribute('href');

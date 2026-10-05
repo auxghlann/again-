@@ -10,7 +10,13 @@ def test_get_study_plans_catalog():
     response = client.get("/api/plans")
     assert response.status_code == 200
     plans = response.json()
-    assert len(plans) == 3
+    assert len(plans) == 4
+    assert {p["id"] for p in plans} == {
+        "sql-beginner",
+        "sql-intermediate",
+        "sql-advance",
+        "sql-dates",
+    }
 
     first = plans[0]
     assert "id" in first
@@ -77,3 +83,32 @@ def test_problem_submissions_history():
     # Verify cleared
     res_after = client.get(f"/api/problems/{prob_id}/submissions")
     assert len(res_after.json()) == 0
+
+
+def test_toggle_problem_solved():
+    """Verifies toggling problem solved status on and off."""
+    prob_id = "sql-beginner:customer-email-domain-cleaner"
+
+    # 1. Clear any prior submissions to ensure clean state
+    client.delete(f"/api/problems/{prob_id}/submissions")
+
+    # 2. Toggle to solved
+    res_on = client.post(f"/api/problems/{prob_id}/toggle-solved")
+    assert res_on.status_code == 200
+    assert res_on.json()["solved"] is True
+
+    # Check plan shows solved
+    res_plan = client.get("/api/plans/sql-beginner")
+    p5 = next(p for p in res_plan.json()["problems"] if p["id"] == prob_id)
+    assert p5["solved"] is True
+
+    # 3. Toggle back to unsolved
+    res_off = client.post(f"/api/problems/{prob_id}/toggle-solved")
+    assert res_off.status_code == 200
+    assert res_off.json()["solved"] is False
+
+    # Check plan shows unsolved
+    res_plan_after = client.get("/api/plans/sql-beginner")
+    p5_after = next(p for p in res_plan_after.json()["problems"] if p["id"] == prob_id)
+    assert p5_after["solved"] is False
+

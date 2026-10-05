@@ -6,4 +6,7 @@ class HealthResponse(BaseModel):
     status: str
     db: str
     postgres: str
+    api: str = "online"
+    runner: str = "connected"
+    runner_python: str = "ready"
     version: str = "1.0.0"

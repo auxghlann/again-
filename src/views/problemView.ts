@@ -14,6 +14,7 @@ import { escapeHtml } from '../components/icons';
 import { showToast } from '../components/toast';
 import { bindCodeEditor } from '../editor/editor';
 import { navigate } from '../router';
+import { setState } from '../state';
 import type {
   CodingProblemDetailResponse,
   SubmissionItem,
@@ -38,19 +39,6 @@ import {
 } from './workbench/workbenchConsole';
 import { renderProblemDescription } from './workbench/workbenchDescription';
 import { renderWorkbenchLayout } from './workbench/workbenchLayout';
-
-const SOLVED_STORAGE_KEY = 'again_solved_problems';
-
-function markProblemSolved(problemId: string): void {
-  try {
-    const raw = localStorage.getItem(SOLVED_STORAGE_KEY);
-    const set = new Set<string>(raw ? JSON.parse(raw) : []);
-    set.add(problemId);
-    localStorage.setItem(SOLVED_STORAGE_KEY, JSON.stringify([...set]));
-  } catch {
-    // ignore
-  }
-}
 
 export async function renderProblemView(container: HTMLElement, problemId: string): Promise<void> {
   container.innerHTML = renderShell(
@@ -467,7 +455,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       updateLeftPanel();
 
       if (isAccepted) {
-        markProblemSolved(problemId);
+        setState({ studyPlans: [] });
         showToast('Accepted. All test cases passed.');
       } else {
         showToast('Wrong answer. Check submission details.');
@@ -479,6 +467,11 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
         })
         .catch(() => {});
       return;
+    }
+
+    if (isAccepted) {
+      runPython({ problemId, code: userCode, is_submission: true }).catch(() => {});
+      setState({ studyPlans: [] });
     }
 
     // Run action -> output to Test Result console
@@ -545,7 +538,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       updateLeftPanel();
 
       if (isAccepted) {
-        markProblemSolved(problemId);
+        setState({ studyPlans: [] });
         showToast('Accepted. Query matches canonical solution.');
       } else {
         showToast(res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match expected dataset.' : 'Execution failed.');
@@ -557,6 +550,11 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
         })
         .catch(() => {});
       return;
+    }
+
+    if (isAccepted) {
+      runSql({ problemId, userQuery: userCode, is_submission: true }).catch(() => {});
+      setState({ studyPlans: [] });
     }
 
     // Run action -> formatted ASCII tables in console

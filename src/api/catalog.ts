@@ -71,3 +71,15 @@ export async function clearProblemSubmissions(
     }
   );
 }
+
+export async function toggleProblemSolved(
+  problemId: string
+): Promise<{ status: string; solved: boolean }> {
+  return apiRequest<{ status: string; solved: boolean }>(
+    `/api/problems/${encodeURIComponent(problemId)}/toggle-solved`,
+    {
+      method: 'POST',
+    }
+  );
+}
+

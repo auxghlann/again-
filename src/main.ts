@@ -73,31 +73,18 @@ async function dispatchCurrentRoute(): Promise<void> {
   }
 }
 
-async function checkBackendConnectivity(): Promise<void> {
+export async function checkBackendConnectivity(): Promise<void> {
   try {
     const res = await getHealth();
-    if (res.status === 'ok') {
-      setState({ backendConnected: true });
-    }
+    const isHealthy = res.status === 'healthy' || res.status === 'ok';
+    setState({ backendConnected: isHealthy, healthData: res });
   } catch {
-    setState({ backendConnected: false });
+    setState({ backendConnected: false, healthData: null });
   }
 }
 
 // React to route changes and theme toggles
-subscribe((state) => {
-  // Update shell status indicators if present on DOM
-  const statusDot = document.getElementById('shell-status-dot');
-  if (statusDot) {
-    statusDot.className = state.backendConnected
-      ? 'w-2 h-2 rounded-full inline-block bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
-      : 'w-2 h-2 rounded-full inline-block bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
-  }
-  const statusLabel = document.getElementById('shell-status-label');
-  if (statusLabel) {
-    statusLabel.textContent = state.backendConnected ? 'API Online' : 'API Offline';
-  }
-
+subscribe(() => {
   dispatchCurrentRoute();
 });
 

@@ -1,14 +1,17 @@
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, status
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from backend.db.database import get_db_session
+from backend.db.models import UserCodingSubmission
 from backend.db.queries.plans import get_study_plan
 from backend.db.queries.problems import get_coding_problem
 from backend.db.queries.submissions import (
     clear_problem_submissions,
     delete_submission,
     list_submissions,
+    record_submission,
 )
 from backend.schemas.plans import PlanProblemChecklistItem, StudyPlanDetailResponse
 from backend.schemas.problems import (
@@ -130,3 +133,45 @@ def remove_submission(
             detail=f"Submission '{submission_id}' not found.",
         )
     return {"status": "ok"}
+
+
+@router.post("/problems/{problem_id}/toggle-solved")
+def toggle_problem_solved(
+    problem_id: str,
+    db: Session = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """Toggles problem solved status by removing or adding an Accepted submission in the database."""
+    prob = get_coding_problem(db, problem_id)
+    if not prob:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Coding problem '{problem_id}' not found.",
+        )
+
+    stmt = (
+        sa.select(UserCodingSubmission)
+        .where(
+            UserCodingSubmission.problem_id == problem_id,
+            UserCodingSubmission.status == "Accepted",
+        )
+    )
+    accepted_rows = db.scalars(stmt).all()
+
+    if accepted_rows:
+        for sub in accepted_rows:
+            db.delete(sub)
+        db.commit()
+        return {"status": "ok", "solved": False}
+    else:
+        lang = prob.get("language") or "SQL"
+        record_submission(
+            db=db,
+            problem_id=problem_id,
+            language=lang,
+            status="Accepted",
+            runtime_ms=1,
+            submitted_code="-- Manually marked as completed",
+        )
+        db.commit()
+        return {"status": "ok", "solved": True}
+

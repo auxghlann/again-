@@ -13,15 +13,15 @@ export function renderConsoleTabsBar(currentConsoleTab: ConsoleTabType, statusTe
   const isCTab = (tab: ConsoleTabType) => currentConsoleTab === tab;
 
   return `
-    <div class="flex items-center gap-1" id="console-tabs-bar">
+    <div class="flex items-center gap-1" id="console-tabs-bar" role="tablist" aria-label="Console tabs">
       <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
         isCTab('testcase') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
-      }" data-ctab="testcase">
+      }" data-ctab="testcase" role="tab" aria-selected="${isCTab('testcase')}">
         ${icon('check', 13)} Testcase
       </button>
       <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
         isCTab('result') ? 'bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
-      }" data-ctab="result">
+      }" data-ctab="result" role="tab" aria-selected="${isCTab('result')}">
         ${icon('terminal', 13)} Test Result
       </button>
     </div>
@@ -48,7 +48,7 @@ export function renderTestCaseTabs(
           ? 'bg-brand-surface border-brand-text text-brand-text shadow-xs font-semibold'
           : 'bg-brand-surface2 border-brand-line text-brand-muted hover:text-brand-text';
         return `
-          <button type="button" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${tabClasses}" data-case="${idx}">
+          <button type="button" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${tabClasses}" data-case="${idx}" role="tab" aria-selected="${isSelected}">
             <span class="w-1.5 h-1.5 rounded-full ${dotBg}"></span>Case ${idx + 1}
           </button>
         `;
@@ -57,7 +57,7 @@ export function renderTestCaseTabs(
     `
       <button type="button" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
         customInputActive ? 'bg-brand-surface border-brand-text text-brand-text shadow-xs font-semibold' : 'bg-brand-surface2 border-brand-line text-brand-muted hover:text-brand-text'
-      }" data-case="custom">
+      }" data-case="custom" role="tab" aria-selected="${customInputActive}">
         <span class="w-1.5 h-1.5 rounded-full bg-brand-muted/40"></span>Custom
       </button>
     `
@@ -113,6 +113,24 @@ export function renderTestResultOutput(
       </div>
 
       ${
+        error
+          ? `
+      <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-mono whitespace-pre-wrap">
+        ${escapeHtml(error)}
+      </div>`
+          : ''
+      }
+
+      ${
+        diff
+          ? `
+      <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs whitespace-pre-wrap">
+        ${escapeHtml(diff)}
+      </div>`
+          : ''
+      }
+
+      ${
         inputTable
           ? `
       <div>
@@ -133,24 +151,6 @@ export function renderTestResultOutput(
       <div>
         <div class="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Expected</div>
         <pre class="p-2 rounded-lg bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-snug whitespace-pre m-0">${escapeHtml(expectedTable)}</pre>
-      </div>`
-          : ''
-      }
-
-      ${
-        diff
-          ? `
-      <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs">
-        ${escapeHtml(diff)}
-      </div>`
-          : ''
-      }
-
-      ${
-        error
-          ? `
-      <div class="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-mono">
-        ${escapeHtml(error)}
       </div>`
           : ''
       }
