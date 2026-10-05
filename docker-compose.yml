@@ -31,6 +31,8 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/again_practice
+    volumes:
+      - ./backend:/app/backend
     depends_on:
       postgres:
         condition: service_healthy

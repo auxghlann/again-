@@ -2050,7 +2050,7 @@ def _seed_with_session(db: Session, reset_coding: bool = True) -> Dict[str, int]
     return counts
 
 
-def seed_db(session: Optional[Session] = None, reset_coding: bool = True) -> Dict[str, int]:
+def seed_db(session: Optional[Session] = None, reset_coding: bool = False) -> Dict[str, int]:
     """Seeds the database with canonical practice topics and three curated SQL study plans."""
     try:
         from backend.seed.runner import run_all_seeds
