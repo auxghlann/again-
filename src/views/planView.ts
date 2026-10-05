@@ -1,28 +1,11 @@
-import { getStudyPlanDetail } from '../api';
+import { getStudyPlanDetail, toggleProblemSolved } from '../api';
 import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
 import { showToast } from '../components/toast';
 import { navigate } from '../router';
+import { setState } from '../state';
 import type { StudyPlanDetailResponse } from '../types';
 
-const SOLVED_STORAGE_KEY = 'again_solved_problems';
-
-function getSolvedProblemIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(SOLVED_STORAGE_KEY);
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveSolvedProblemIds(solved: Set<string>): void {
-  try {
-    localStorage.setItem(SOLVED_STORAGE_KEY, JSON.stringify([...solved]));
-  } catch {
-    // ignore
-  }
-}
 
 export async function renderPlanView(container: HTMLElement, planId: string): Promise<void> {
   // Show loading state
@@ -64,10 +47,9 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
   const planDesc = planData.plan?.description || planData.subtitle || planData.title;
   const planCategory = planData.plan?.category || planData.language || 'SQL';
   const problems = planData.problems || [];
-  const solvedSet = getSolvedProblemIds();
 
   function countSolved(): number {
-    return problems.filter((p) => solvedSet.has(p.id || p.problemId || '') || p.solved).length;
+    return problems.filter((p) => !!p.solved).length;
   }
 
   function renderView(): void {
@@ -78,7 +60,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
     const rowsHtml = problems
       .map((p) => {
         const pid = p.id || p.problemId || '';
-        const isDone = solvedSet.has(pid) || !!p.solved;
+        const isDone = !!p.solved;
         const diffColor =
           p.difficulty === 'Easy'
             ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
@@ -162,7 +144,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
     const startBtn = container.querySelector('#start-plan-btn') as HTMLButtonElement | null;
     if (startBtn) {
       startBtn.onclick = () => {
-        const nextUnsolved = problems.find((p) => !solvedSet.has(p.id || p.problemId || '') && !p.solved) || problems[0];
+        const nextUnsolved = problems.find((p) => !p.solved) || problems[0];
         if (nextUnsolved) {
           const nextPid = nextUnsolved.id || nextUnsolved.problemId || '';
           navigate(`#/problem/${encodeURIComponent(nextPid)}`);
@@ -180,7 +162,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
 
     const rowsContainer = container.querySelector('#plan-rows');
     if (rowsContainer) {
-      rowsContainer.addEventListener('click', (e) => {
+      rowsContainer.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
 
         // Toggle checkbox
@@ -188,13 +170,20 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
         if (tickBtn) {
           const pid = tickBtn.dataset.tick;
           if (pid) {
-            if (solvedSet.has(pid)) {
-              solvedSet.delete(pid);
-            } else {
-              solvedSet.add(pid);
+            tickBtn.disabled = true;
+            try {
+              const res = await toggleProblemSolved(pid);
+              const prob = problems.find((p) => (p.id || p.problemId) === pid);
+              if (prob) {
+                prob.solved = res.solved;
+              }
+              setState({ studyPlans: [] });
+              renderView();
+              showToast(res.solved ? 'Marked as completed' : 'Marked as incomplete');
+            } catch {
+              tickBtn.disabled = false;
+              showToast('Failed to update problem status');
             }
-            saveSolvedProblemIds(solvedSet);
-            renderView();
           }
           return;
         }

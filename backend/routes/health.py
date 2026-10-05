@@ -1,3 +1,4 @@
+import sys
 from fastapi import APIRouter
 import sqlalchemy as sa
 
@@ -10,7 +11,7 @@ router = APIRouter(tags=["health"])
 
 @router.get("/healthz", response_model=HealthResponse)
 def get_health() -> HealthResponse:
-    """Returns local service health for the app database and PostgreSQL sandbox."""
+    """Returns local service health for API, database, and execution runner sandboxes."""
     # Check app database connection
     db_status = "error"
     try:
@@ -20,13 +21,23 @@ def get_health() -> HealthResponse:
     except Exception as e:
         db_status = f"unreachable ({e})"
 
-    # Check PostgreSQL sandbox connection
+    # Check PostgreSQL sandbox runner connection
     pg_connected = check_postgres_connection()
     postgres_status = "connected" if pg_connected else "disconnected"
 
+    # Check Python sandbox runner capability
+    python_status = "ready" if sys.executable else "unavailable"
+
+    # Overall runner health
+    runner_status = "connected" if pg_connected else "disconnected"
+    overall_status = "healthy" if (db_status == "connected" and pg_connected) else "degraded"
+
     return HealthResponse(
-        status="healthy" if db_status == "connected" else "degraded",
+        status=overall_status,
+        api="online",
         db=db_status,
         postgres=postgres_status,
+        runner=runner_status,
+        runner_python=python_status,
         version="1.0.0",
     )

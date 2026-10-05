@@ -1,5 +1,6 @@
 import type {
   CodingProblemDetailResponse,
+  HealthResponse,
   PracticeTopicCard,
   QuizDetailResponse,
   StudyPlanDetailResponse,
@@ -14,6 +15,7 @@ export interface AppState {
   activeRoute: string;
   routeParams: Record<string, string>;
   backendConnected: boolean;
+  healthData: HealthResponse | null;
   practiceTopics: PracticeTopicCard[];
   studyPlans: StudyPlanSummary[];
   activeQuiz: QuizDetailResponse | null;
@@ -49,6 +51,7 @@ const state: AppState = {
   activeRoute: 'practice',
   routeParams: {},
   backendConnected: false,
+  healthData: null,
   practiceTopics: [],
   studyPlans: [],
   activeQuiz: null,

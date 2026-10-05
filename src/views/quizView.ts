@@ -9,8 +9,22 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
   container.innerHTML = renderShell(
     'practice',
     `
-      <div class="page qz-page">
-        <div class="empty">Loading practice session questions...</div>
+      <div class="page qz-page p-6 max-w-2xl mx-auto w-full animate-pulse">
+        <div class="flex justify-between items-baseline mb-4">
+          <div class="h-7 w-48 bg-brand-line/60 rounded-lg"></div>
+          <div class="h-4 w-24 bg-brand-line/40 rounded"></div>
+        </div>
+        <div class="h-1.5 w-full bg-brand-line/40 rounded-full mb-6"></div>
+        <div class="bg-brand-surface border border-brand-line rounded-xl p-6 sm:p-7 shadow-xs space-y-4">
+          <div class="h-3 w-20 bg-brand-line/50 rounded"></div>
+          <div class="h-6 w-3/4 bg-brand-line/60 rounded"></div>
+          <div class="space-y-3 pt-3">
+            <div class="h-12 bg-brand-surface2/60 rounded-xl border border-brand-line/40"></div>
+            <div class="h-12 bg-brand-surface2/60 rounded-xl border border-brand-line/40"></div>
+            <div class="h-12 bg-brand-surface2/60 rounded-xl border border-brand-line/40"></div>
+            <div class="h-12 bg-brand-surface2/60 rounded-xl border border-brand-line/40"></div>
+          </div>
+        </div>
       </div>
     `,
     ['Practice Library', 'Loading...']
@@ -153,13 +167,14 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
     let bodyHtml = '';
     if (q.type === 'mcq' && q.options) {
       bodyHtml = `
-        <div class="qz-opts flex flex-col gap-2.5 my-4" id="mcq-opts">
+        <div class="qz-opts flex flex-col gap-2.5 my-4" id="mcq-opts" role="radiogroup" aria-label="Question choices">
           ${q.options
             .map((opt, idx) => {
               let stateClasses = 'border-brand-line bg-brand-surface2 text-brand-text hover:border-brand-muted/60';
               let letterStateClasses = 'bg-brand-line/60 text-brand-muted';
               let cls = '';
               const isOptionCorrect = checkCorrectness(q, opt);
+              const isSelected = opt === picked;
               if (isChecked) {
                 if (isOptionCorrect) {
                   cls = 'correct';
@@ -170,14 +185,14 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
                   stateClasses = 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300';
                   letterStateClasses = 'bg-rose-500 text-white';
                 }
-              } else if (opt === picked) {
+              } else if (isSelected) {
                 cls = 'sel';
-                stateClasses = 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
+                stateClasses = 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
                 letterStateClasses = 'bg-indigo-600 text-white';
               }
               const letter = 'ABCD'[idx] || `${idx + 1}`;
               return `
-                <button type="button" class="qz-opt flex items-center gap-3 text-left border rounded-xl p-3.5 text-sm font-medium w-full transition-all ${stateClasses} ${cls}" data-opt="${escapeHtml(opt)}" ${isChecked ? 'disabled' : ''}>
+                <button type="button" class="qz-opt flex items-center gap-3 text-left border rounded-xl p-3.5 text-sm font-medium w-full transition-all cursor-pointer ${stateClasses} ${cls}" data-opt="${escapeHtml(opt)}" role="radio" aria-checked="${isSelected}" ${isChecked ? 'disabled' : ''}>
                   <span class="qz-letter shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${letterStateClasses}">${letter}</span>
                   <span class="flex-1 min-w-0">${escapeHtml(opt)}</span>
                   ${isChecked && isOptionCorrect ? `<span class="ic ml-auto shrink-0 text-emerald-600 dark:text-emerald-400">${icon('check', 15)}</span>` : ''}
@@ -189,12 +204,13 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
       `;
     } else if (q.type === 'tf') {
       bodyHtml = `
-        <div class="qz-tf flex gap-3 my-4" id="tf-opts">
+        <div class="qz-tf flex gap-3 my-4" id="tf-opts" role="radiogroup" aria-label="True or False choices">
           ${['True', 'False']
             .map((val) => {
               let stateClasses = 'border-brand-line bg-brand-surface2 text-brand-text hover:border-brand-muted/60';
               let cls = '';
               const isValCorrect = checkCorrectness(q, val);
+              const isSelected = picked !== null && picked.toLowerCase() === val.toLowerCase();
               if (isChecked) {
                 if (isValCorrect) {
                   cls = 'correct';
@@ -203,12 +219,12 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
                   cls = 'wrong';
                   stateClasses = 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300';
                 }
-              } else if (picked && picked.toLowerCase() === val.toLowerCase()) {
+              } else if (isSelected) {
                 cls = 'sel';
-                stateClasses = 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
+                stateClasses = 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
               }
               return `
-                <button type="button" class="flex-1 py-3.5 px-4 rounded-xl border font-bold text-sm transition-all ${stateClasses} ${cls}" data-val="${val}" ${isChecked ? 'disabled' : ''}>
+                <button type="button" class="flex-1 py-3.5 px-4 rounded-xl border font-bold text-sm transition-all cursor-pointer ${stateClasses} ${cls}" data-val="${val}" role="radio" aria-checked="${isSelected}" ${isChecked ? 'disabled' : ''}>
                   ${val}
                 </button>
               `;
@@ -293,16 +309,18 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
             const btn = (e.target as HTMLElement).closest('.qz-opt') as HTMLButtonElement | null;
             if (!btn) return;
             picked = btn.dataset.opt || null;
+            const selClasses = ['sel', 'border-indigo-500', 'bg-indigo-50/80', 'dark:bg-indigo-950/60', 'text-indigo-950', 'dark:text-indigo-200'];
             optsContainer.querySelectorAll('.qz-opt').forEach((el) => {
-              const isSelected = (el as HTMLButtonElement).dataset.opt === picked;
-              el.classList.toggle('sel', isSelected);
-              el.classList.toggle('border-indigo-500', isSelected);
-              el.classList.toggle('bg-indigo-50', isSelected);
-              el.classList.toggle('text-indigo-700', isSelected);
+              const optBtn = el as HTMLButtonElement;
+              const isSelected = optBtn.dataset.opt === picked;
+              optBtn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+              selClasses.forEach((c) => optBtn.classList.toggle(c, isSelected));
               const letter = el.querySelector('.qz-letter');
               if (letter) {
-                letter.classList.toggle('bg-indigo-500', isSelected);
+                letter.classList.toggle('bg-indigo-600', isSelected);
                 letter.classList.toggle('text-white', isSelected);
+                letter.classList.toggle('bg-brand-line/60', !isSelected);
+                letter.classList.toggle('text-brand-muted', !isSelected);
               }
             });
             const checkBtn = container.querySelector('#quiz-check-btn') as HTMLButtonElement | null;
@@ -316,12 +334,12 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
             const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null;
             if (!btn) return;
             picked = btn.dataset.val || null;
+            const selClasses = ['sel', 'border-indigo-500', 'bg-indigo-50/80', 'dark:bg-indigo-950/60', 'text-indigo-950', 'dark:text-indigo-200'];
             tfContainer.querySelectorAll('button').forEach((el) => {
-              const isSelected = el.dataset.val === picked;
-              el.classList.toggle('sel', isSelected);
-              el.classList.toggle('border-indigo-500', isSelected);
-              el.classList.toggle('bg-indigo-50', isSelected);
-              el.classList.toggle('text-indigo-700', isSelected);
+              const tfBtn = el as HTMLButtonElement;
+              const isSelected = tfBtn.dataset.val === picked;
+              tfBtn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+              selClasses.forEach((c) => tfBtn.classList.toggle(c, isSelected));
             });
             const checkBtn = container.querySelector('#quiz-check-btn') as HTMLButtonElement | null;
             if (checkBtn) checkBtn.disabled = false;

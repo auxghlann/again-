@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "powershell -ExecutionPolicy Bypass -File scripts/test-all.ps1",
+    "test:all": "powershell -ExecutionPolicy Bypass -File scripts/test-all.ps1",
+    "test:backend": "powershell -ExecutionPolicy Bypass -File scripts/test-all.ps1 -SkipE2E",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

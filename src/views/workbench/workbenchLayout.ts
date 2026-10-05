@@ -37,9 +37,9 @@ export function renderWorkbenchLayout(props: WorkbenchLayoutProps): string {
       </div>
 
       <!-- Bento Workspace Canvas -->
-      <div class="bento-workspace flex-1 flex p-2 gap-2 min-h-0 h-full max-h-full overflow-hidden bg-brand-bg select-none-during-drag" id="bento-workspace">
+      <div class="bento-workspace flex-1 flex flex-col md:flex-row p-2 gap-2 min-h-0 h-full max-h-full overflow-y-auto md:overflow-hidden bg-brand-bg select-none-during-drag" id="bento-workspace">
         <!-- Left Panel: Problem Card -->
-        <section id="bento-left" class="flex flex-col min-w-[280px] max-w-[80%] h-full max-h-full min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden shrink-0" style="width: ${props.splitX}%;">
+        <section id="bento-left" class="flex flex-col max-md:!w-full max-md:h-[380px] min-w-0 md:min-w-[280px] md:max-w-[80%] h-full max-h-full min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden shrink-0" style="width: ${props.splitX}%;">
           <div class="h-10 flex items-center border-b border-brand-line px-3 bg-brand-surface2/50 shrink-0 gap-1" id="left-panel-tabs">
             ${props.leftPanelTabsHtml}
           </div>
@@ -49,14 +49,14 @@ export function renderWorkbenchLayout(props: WorkbenchLayoutProps): string {
         </section>
 
         <!-- Vertical Resizer Gutter -->
-        <div id="bento-col-resizer" class="w-2 shrink-0 flex items-center justify-center cursor-col-resize group select-none touch-none" title="Drag to resize panels">
+        <div id="bento-col-resizer" class="hidden md:flex w-2 shrink-0 items-center justify-center cursor-col-resize group select-none touch-none" title="Drag to resize panels">
           <div class="w-1 h-8 rounded-full bg-brand-line group-hover:bg-blue-500 group-hover:h-14 group-hover:w-1.5 transition-all duration-150"></div>
         </div>
 
         <!-- Right Stack: Editor & Console -->
-        <section id="bento-right" class="flex-1 flex flex-col min-w-[320px] min-h-0 h-full max-h-full gap-2 overflow-hidden">
+        <section id="bento-right" class="flex-1 flex flex-col w-full md:w-auto min-w-0 md:min-w-[320px] min-h-0 h-auto md:h-full md:max-h-full gap-2 overflow-visible md:overflow-hidden">
           <!-- Right Top Card: Code Editor -->
-          <div id="bento-editor-card" class="flex flex-col min-h-[140px] max-h-[85%] rounded-xl border border-brand-line bg-[#081120] shadow-xs overflow-hidden shrink-0" style="height: ${props.splitY}%;">
+          <div id="bento-editor-card" class="flex flex-col max-md:!h-[360px] min-h-[140px] md:max-h-[85%] rounded-xl border border-brand-line bg-[#081120] shadow-xs overflow-hidden shrink-0" style="height: ${props.splitY}%;">
             <!-- Editor Top Bar -->
             <div class="h-10 flex-none flex items-center justify-between px-3 text-xs bg-[#0c1626] border-b border-[#1b2740] gap-2">
               <div class="flex items-center gap-2">
@@ -105,12 +105,12 @@ export function renderWorkbenchLayout(props: WorkbenchLayoutProps): string {
           </div>
 
           <!-- Horizontal Resizer Gutter -->
-          <div id="bento-row-resizer" class="h-2 shrink-0 flex items-center justify-center cursor-row-resize group select-none touch-none" title="Drag to resize console">
+          <div id="bento-row-resizer" class="hidden md:flex h-2 shrink-0 items-center justify-center cursor-row-resize group select-none touch-none" title="Drag to resize console">
             <div class="h-1 w-8 rounded-full bg-brand-line group-hover:bg-blue-500 group-hover:w-14 group-hover:h-1.5 transition-all duration-150"></div>
           </div>
 
           <!-- Right Bottom Card: Testcase & Console -->
-          <div id="bento-console-card" class="flex-1 flex flex-col min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden">
+          <div id="bento-console-card" class="flex-1 flex flex-col min-h-[280px] md:min-h-0 rounded-xl border border-brand-line bg-brand-surface shadow-xs overflow-hidden shrink-0 md:shrink">
             <div class="h-10 flex-none flex items-center justify-between px-3 border-b border-brand-line bg-brand-surface2/50 text-xs" id="console-header-container">
               ${props.consoleHeaderHtml}
             </div>

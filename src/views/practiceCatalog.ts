@@ -75,8 +75,34 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
     container.innerHTML = renderShell(
       'practice',
       `
-        <div class="page">
-          <div class="empty">Loading practice library topics...</div>
+        <div class="page p-6 w-full animate-pulse">
+          <div class="flex items-center gap-2 mb-5">
+            <div class="h-6 w-16 bg-brand-line/60 rounded-full"></div>
+            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
+            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
+          </div>
+          <div class="flex items-center justify-between mb-5">
+            <div class="h-4 w-32 bg-brand-line/60 rounded"></div>
+            <div class="h-8 w-44 bg-brand-line/40 rounded-lg"></div>
+          </div>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
+            ${Array.from({ length: 6 })
+              .map(
+                () => `
+              <div class="bg-brand-surface border border-brand-line rounded-xl p-5 min-h-[140px] flex flex-col justify-between">
+                <div>
+                  <div class="h-3 w-20 bg-brand-line/60 rounded mb-3"></div>
+                  <div class="h-5 w-3/4 bg-brand-line rounded mb-3"></div>
+                </div>
+                <div class="flex items-center justify-between pt-4 mt-auto">
+                  <div class="h-3 w-24 bg-brand-line/50 rounded"></div>
+                  <div class="h-6 w-16 bg-brand-line/60 rounded-md"></div>
+                </div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
         </div>
       `,
       ['Practice Library', 'All Topics']
@@ -158,7 +184,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
       : `<div class="empty col-span-full w-full p-10 text-center text-sm text-brand-muted bg-brand-surface border border-dashed border-brand-line rounded-xl my-2">Nothing matches that search. Clear the search or pick another filter.</div>`;
 
     const contentHtml = `
-      <div class="page p-6 max-w-6xl w-full">
+      <div class="page p-6 w-full">
         <div class="chips flex flex-wrap gap-2" id="practice-chips">${chipsHtml}</div>
         <div class="tools flex items-center justify-between gap-3 flex-wrap my-5">
           <div class="count text-xs font-semibold text-brand-text" id="practice-count">${countText}</div>
