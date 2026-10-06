@@ -29,7 +29,7 @@ export function openSettingsModal(): void {
       (health?.api === 'online' || health?.status === 'healthy' || health?.status === 'ok');
     const isDbOnline =
       isConnected &&
-      (health?.db === 'connected' || health?.postgres === 'connected');
+      (health?.db === 'connected');
     const isRunnerOnline =
       isConnected &&
       (health?.runner === 'connected' || health?.runner_python === 'ready');

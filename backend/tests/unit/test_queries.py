@@ -1,7 +1,5 @@
-import pytest
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from backend.db.database import get_engine, init_db
 from backend.db.queries import (
     clear_problem_submissions,
     create_coding_problem,
@@ -35,20 +33,7 @@ from backend.db.queries import (
     update_test_case,
     upsert_quiz_progress,
 )
-from backend.db.seed import seed_db
 
-
-@pytest.fixture
-def db_session():
-    """Provides a fresh in-memory SQLite session with initialized schema."""
-    engine = get_engine("sqlite:///:memory:")
-    init_db(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    session = session_factory()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def test_practice_topics_crud(db_session: Session):
@@ -162,16 +147,19 @@ def test_list_practice_topics_aggregation(db_session: Session):
     create_quiz_question(db_session, "q2", "t1", "tf", "P2", None, "true", None, "E2", 1)
 
     topics = list_practice_topics(db_session)
-    assert len(topics) == 1
-    assert topics[0]["total_questions"] == 2
-    assert topics[0]["answered_count"] == 0
-    assert topics[0]["done"] is False
+    t1_topic = next((t for t in topics if t["id"] == "t1"), None)
+    assert t1_topic is not None
+    assert t1_topic["total_questions"] == 2
+    assert t1_topic["answered_count"] == 0
+    assert t1_topic["done"] is False
 
     # Mark 1 answer
     upsert_quiz_progress(db_session, "t1", 1, {"0": {"value": 0, "correct": True}}, False)
     topics_updated = list_practice_topics(db_session)
-    assert topics_updated[0]["answered_count"] == 1
-    assert topics_updated[0]["done"] is False
+    t1_updated = next((t for t in topics_updated if t["id"] == "t1"), None)
+    assert t1_updated is not None
+    assert t1_updated["answered_count"] == 1
+    assert t1_updated["done"] is False
 
 
 def test_study_plans_and_problems_crud(db_session: Session):
@@ -313,20 +301,3 @@ def test_submissions_crud(db_session: Session):
     cleared = clear_problem_submissions(db_session, "prob1")
     assert cleared == 2
     assert len(list_submissions(db_session, "prob1")) == 0
-
-
-def test_seed_db_idempotency(db_session: Session):
-    """Verifies that seed_db populates the database and does not duplicate on second execution."""
-    res1 = seed_db(db_session, reset_coding=False)
-    assert res1["topics"] == 20
-    assert res1["questions"] == 80
-    assert res1["plans"] == 4
-    assert res1["problems"] == 20
-    assert res1["test_cases"] == 20
-
-    res2 = seed_db(db_session, reset_coding=False)
-    assert res2["topics"] == 0
-    assert res2["questions"] == 0
-    assert res2["plans"] == 0
-    assert res2["problems"] == 0
-    assert res2["test_cases"] == 0

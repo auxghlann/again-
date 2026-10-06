@@ -137,3 +137,46 @@ def test_postgres_runner_rollback_guarantee_on_query_error():
         mock_conn.rollback.assert_called_once()
         mock_cur.close.assert_called_once()
         mock_conn.close.assert_called_once()
+
+
+def test_python_runner_zero_division_error():
+    """Verifies runtime exceptions like ZeroDivisionError are caught cleanly without crashing host."""
+    code = """
+class Solution:
+    def calc(self, n):
+        return 10 // n
+"""
+    test_cases = [{"input": {"n": 0}, "expected_output": 1}]
+    result = run_python_sandbox(code, test_cases, timeout_seconds=2.0)
+    assert result["passed"] is False
+    assert result["status"] == "Runtime Error"
+    assert "division by zero" in result["output"] or "ZeroDivisionError" in result.get("error", "")
+
+
+def test_python_runner_recursion_error():
+    """Verifies deep recursion errors are captured cleanly as Runtime Error."""
+    code = """
+class Solution:
+    def recurse(self, x):
+        return self.recurse(x + 1)
+"""
+    test_cases = [{"input": {"x": 1}, "expected_output": 1}]
+    result = run_python_sandbox(code, test_cases, timeout_seconds=2.0)
+    assert result["passed"] is False
+    assert result["status"] == "Runtime Error"
+    assert "maximum recursion depth exceeded" in result.get("error", "") or "RecursionError" in result.get("output", "")
+
+
+def test_python_runner_positional_list_input():
+    """Verifies positional input lists unpack correctly into multi-argument methods."""
+    code = """
+class Solution:
+    def multiply(self, a, b, c):
+        return a * b * c
+"""
+    test_cases = [{"input": [2, 3, 4], "expected_output": 24}]
+    result = run_python_sandbox(code, test_cases, timeout_seconds=2.0)
+    assert result["passed"] is True
+    assert result["status"] == "Accepted"
+    assert result["passed_count"] == 1
+

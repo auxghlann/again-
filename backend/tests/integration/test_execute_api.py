@@ -1,16 +1,10 @@
-from fastapi.testclient import TestClient
-
-from backend.app import app
-
-client = TestClient(app)
-
-
-def test_execute_sql_accepted_and_records_submission():
+def test_execute_sql_accepted_and_records_submission(client):
     """Verifies that a valid SQL solution passes execution and logs submission only when is_submission is True."""
     prob_id = "sql-beginner:low-stock-inventory-alert"
 
-    # Clear prior submissions to ensure exact assertion
-    client.delete(f"/api/problems/{prob_id}/submissions")
+    # Read initial submission count to verify deltas without wiping pre-existing user data
+    subs_initial = client.get(f"/api/problems/{prob_id}/submissions").json()
+    initial_count = len(subs_initial)
 
     correct_solution = """
 SELECT item_id, item_name, category, quantity_in_stock
@@ -32,7 +26,7 @@ ORDER BY quantity_in_stock ASC, item_id ASC;
     # Verify zero submissions recorded on scratchpad run
     subs_res0 = client.get(f"/api/problems/{prob_id}/submissions")
     assert subs_res0.status_code == 200
-    assert len(subs_res0.json()) == 0
+    assert len(subs_res0.json()) == initial_count
 
     # 2. Official Submission (is_submission=True) - executes and records submission
     response = client.post(
@@ -46,16 +40,16 @@ ORDER BY quantity_in_stock ASC, item_id ASC;
     assert data["status"] == "Accepted"
     assert data["error"] is None
 
-    # Verify that a submission was logged
+    # Verify that exactly one submission was logged
     subs_res = client.get(f"/api/problems/{prob_id}/submissions")
     assert subs_res.status_code == 200
     subs = subs_res.json()
-    assert len(subs) == 1
+    assert len(subs) == initial_count + 1
     assert subs[0]["status"] == "Accepted"
     assert subs[0]["language"] == "SQL"
 
 
-def test_execute_sql_wrong_answer():
+def test_execute_sql_wrong_answer(client):
     """Verifies that an incorrect SQL query returns Wrong Answer."""
     prob_id = "sql-beginner:low-stock-inventory-alert"
     wrong_solution = "SELECT item_id, item_name, category, quantity_in_stock FROM Inventory WHERE 1=0;"
@@ -71,7 +65,7 @@ def test_execute_sql_wrong_answer():
     assert data["status"] == "Wrong Answer"
 
 
-def test_execute_sql_syntax_error():
+def test_execute_sql_syntax_error(client):
     """Verifies that malformed SQL returns Runtime Error with error trace."""
     prob_id = "sql-beginner:low-stock-inventory-alert"
     broken_sql = "SELEC * FROMM NonExistentTable;"
@@ -88,14 +82,14 @@ def test_execute_sql_syntax_error():
     assert data["error"] is not None
 
 
-def test_execute_sql_advance_window_functions():
+def test_execute_sql_advance_window_functions(client):
     """Verifies that advanced SQL queries utilizing window functions execute cleanly."""
     prob_id = "sql-advance:rank-scores"
     solution = "SELECT score, DENSE_RANK() OVER (ORDER BY score DESC) AS rank FROM Scores ORDER BY score DESC;"
 
     response = client.post(
         "/api/run/sql",
-        json={"problem_id": prob_id, "user_sql": solution, "is_submission": True},
+        json={"problem_id": prob_id, "user_sql": solution, "is_submission": False},
     )
     assert response.status_code == 200
     data = response.json()
@@ -104,7 +98,7 @@ def test_execute_sql_advance_window_functions():
     assert len(data["rows"]) == 6
 
 
-def test_execute_non_existent_problem_returns_404():
+def test_execute_non_existent_problem_returns_404(client):
     """Verifies that non-existent problem IDs yield 404."""
     sql_res = client.post(
         "/api/run/sql",

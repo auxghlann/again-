@@ -4,6 +4,7 @@
  */
 
 import {
+  deleteSubmission,
   getCodingProblemDetail,
   getProblemSubmissions,
   runPython,
@@ -292,11 +293,25 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       };
     }
 
-    const detailCloseBtn = container.querySelector('#detail-close-btn');
-    if (detailCloseBtn) {
-      (detailCloseBtn as HTMLElement).onclick = () => {
-        currentLeftTab = 'desc';
-        updateLeftPanel();
+    const deleteSubBtn = container.querySelector('#delete-sub-btn') as HTMLButtonElement | null;
+    if (deleteSubBtn && deleteSubBtn.dataset.subId) {
+      deleteSubBtn.onclick = async () => {
+        const subId = deleteSubBtn.dataset.subId!;
+        deleteSubBtn.disabled = true;
+        try {
+          await deleteSubmission(subId);
+          submissions = submissions.filter((s) => s.id !== subId);
+          if (selectedSubmission?.status === 'Accepted') {
+            setState({ studyPlans: [] });
+          }
+          selectedSubmission = null;
+          currentLeftTab = 'subs';
+          showToast('Submission deleted');
+          updateLeftPanel();
+        } catch {
+          deleteSubBtn.disabled = false;
+          showToast('Failed to delete submission');
+        }
       };
     }
 

@@ -5,26 +5,14 @@ from typing import Any, Dict, List, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from backend.config import (
-    POSTGRES_DB,
-    POSTGRES_HOST,
-    POSTGRES_PASSWORD,
-    POSTGRES_PORT,
-    POSTGRES_USER,
-)
+from backend.db.database import DATABASE_URL
 
 
 def check_postgres_connection() -> bool:
     """Checks if the PostgreSQL execution target is reachable."""
     try:
-        conn = psycopg2.connect(
-            host=POSTGRES_HOST,
-            port=POSTGRES_PORT,
-            dbname=POSTGRES_DB,
-            user=POSTGRES_USER,
-            password=POSTGRES_PASSWORD,
-            connect_timeout=2,
-        )
+        target_url = DATABASE_URL.replace("+psycopg2", "")
+        conn = psycopg2.connect(target_url, connect_timeout=2)
         conn.close()
         return True
     except Exception:
@@ -59,14 +47,8 @@ def run_sql_sandbox(
     """Executes SQL in a strict BEGIN ... ROLLBACK transaction and validates results."""
     # 1. Connect to PostgreSQL
     try:
-        conn = psycopg2.connect(
-            host=POSTGRES_HOST,
-            port=POSTGRES_PORT,
-            dbname=POSTGRES_DB,
-            user=POSTGRES_USER,
-            password=POSTGRES_PASSWORD,
-            connect_timeout=3,
-        )
+        target_url = DATABASE_URL.replace("+psycopg2", "")
+        conn = psycopg2.connect(target_url, connect_timeout=3)
     except psycopg2.OperationalError as e:
         return {
             "passed": False,
@@ -77,7 +59,7 @@ def run_sql_sandbox(
             "expected_rows": None,
             "diff": None,
             "error": (
-                f"PostgreSQL target is unreachable on {POSTGRES_HOST}:{POSTGRES_PORT}. "
+                f"PostgreSQL target is unreachable. "
                 f"Ensure PostgreSQL is running. Details: {e}"
             ),
         }

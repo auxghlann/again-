@@ -15,13 +15,11 @@ export function renderLeftPanelTabs(
   const isLTab = (tab: LeftTabType) => currentLeftTab === tab;
 
   let tabsHtml = `
-    <button type="button" id="tab-btn-desc" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-      isLTab('desc') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+    <button type="button" id="tab-btn-desc" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('desc') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
     }" data-ltab="desc">
       ${icon('doc', 13)} Description
     </button>
-    <button type="button" id="tab-btn-subs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-      isLTab('subs') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+    <button type="button" id="tab-btn-subs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('subs') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
     }" data-ltab="subs">
       ${icon('activity', 13)} Submissions
     </button>
@@ -90,9 +88,13 @@ export function renderSubmissionDetailView(
         <button type="button" class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-muted hover:text-brand-text transition-colors cursor-pointer" id="back-to-subs-btn">
           ${icon('left', 13)} All Submissions
         </button>
-        <button type="button" class="text-brand-muted hover:text-brand-text p-1 rounded hover:bg-brand-surface text-sm cursor-pointer" id="detail-close-btn" title="Back to Description">
-          &times;
-        </button>
+        <div class="flex items-center gap-2">
+          ${selectedSubmission?.id ? `
+            <button type="button" id="delete-sub-btn" data-sub-id="${escapeHtml(selectedSubmission.id)}" class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-2 py-1 rounded transition-colors cursor-pointer" title="Delete this submission">
+              ${icon('trash', 12)} Delete
+            </button>
+          ` : ''}
+        </div>
       </div>
 
       <div>
@@ -153,11 +155,11 @@ export function renderSubmissionsList(submissions: SubmissionItem[]): string {
         </thead>
         <tbody class="divide-y divide-brand-line">
           ${submissions
-            .map((s, idx) => {
-              const isAccepted = s.status === 'Accepted';
-              const runMs = s.runtime_ms ?? s.runtimeMs ?? s.executionTimeMs ?? 0;
-              const dateStr = s.created_at ?? s.createdAt ?? 'Recent';
-              return `
+      .map((s, idx) => {
+        const isAccepted = s.status === 'Accepted';
+        const runMs = s.runtime_ms ?? s.runtimeMs ?? s.executionTimeMs ?? 0;
+        const dateStr = s.created_at ?? s.createdAt ?? 'Recent';
+        return `
                 <tr class="sub-row hover:bg-brand-surface2/50 transition-colors cursor-pointer group" data-sub-idx="${idx}" title="Click to view submission details">
                   <td class="p-3 font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'} group-hover:underline">${escapeHtml(s.status)}</td>
                   <td class="p-3">${escapeHtml(s.language)}</td>
@@ -165,8 +167,8 @@ export function renderSubmissionsList(submissions: SubmissionItem[]): string {
                   <td class="p-3 text-brand-muted">${escapeHtml(dateStr)}</td>
                 </tr>
               `;
-            })
-            .join('')}
+      })
+      .join('')}
         </tbody>
       </table>
     </div>

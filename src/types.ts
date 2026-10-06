@@ -212,7 +212,6 @@ export interface HealthResponse {
   status: string;
   api?: string;
   db: string;
-  postgres: string;
   runner?: string;
   runner_python?: string;
   version: string;

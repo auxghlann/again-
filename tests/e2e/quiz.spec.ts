@@ -19,8 +19,12 @@ test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
       await expect(pythonChip).toHaveClass(/\bon\b/);
     }
 
-    // 3. Select a Practice topic card
-    const targetCard = page.locator('a.card[href="#/quiz/python-dictionary-comprehension"]');
+    // 3. Select a Practice topic card and capture initial progress to restore after test
+    const topicSlug = 'python-dictionary-comprehension';
+    const initRes = await page.request.get(`http://127.0.0.1:8000/api/quiz/${topicSlug}`);
+    const initialProgress = initRes.ok() ? (await initRes.json()).progress : null;
+
+    const targetCard = page.locator(`a.card[href="#/quiz/${topicSlug}"]`);
     await expect(targetCard).toBeVisible();
     await targetCard.click();
 
@@ -77,5 +81,17 @@ test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
 
     await expect(page).toHaveURL(/#\/practice/);
     await expect(page.locator('.topbar')).toContainText('Practice');
+
+    // 8. Restore initial practice progress or clean up test-generated progress
+    if (initialProgress) {
+      await page.request.post(
+        `http://127.0.0.1:8000/api/quiz/${topicSlug}/progress`,
+        { data: initialProgress }
+      );
+    } else {
+      await page.request.delete(
+        `http://127.0.0.1:8000/api/quiz/${topicSlug}/progress`
+      );
+    }
   });
 });
