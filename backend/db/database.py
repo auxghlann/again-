@@ -4,7 +4,12 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, event, Engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 
-from backend.config import DATABASE_URL, ensure_data_dir
+import os
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql+psycopg2://postgres:postgres@localhost:5432/again_practice"
+)
 
 
 class Base(DeclarativeBase):
@@ -12,34 +17,15 @@ class Base(DeclarativeBase):
     pass
 
 
-def _sqlite_connect_listener(dbapi_connection, connection_record):
-    """Enforces SQLite foreign keys, WAL journal mode, and NORMAL sync."""
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON;")
-    cursor.execute("PRAGMA journal_mode = WAL;")
-    cursor.execute("PRAGMA synchronous = NORMAL;")
-    cursor.close()
-
-
 def get_engine(db_url: Optional[str] = None) -> Engine:
-    """Creates and configures an engine instance with SQLite optimizations."""
+    """Creates and configures an engine instance for PostgreSQL."""
     target_url = db_url if db_url is not None else DATABASE_URL
-
-    if "sqlite" in target_url and ":memory:" not in target_url:
-        ensure_data_dir()
-
-    is_sqlite = "sqlite" in target_url
-    connect_args = {"check_same_thread": False} if is_sqlite else {}
 
     eng = create_engine(
         target_url,
         echo=False,
         future=True,
-        connect_args=connect_args,
     )
-
-    if is_sqlite:
-        event.listen(eng, "connect", _sqlite_connect_listener)
 
     return eng
 

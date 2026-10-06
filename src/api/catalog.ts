@@ -61,6 +61,17 @@ export async function getProblemSubmissions(problemId: string): Promise<Submissi
   return apiRequest<SubmissionItem[]>(`/api/problems/${encodeURIComponent(problemId)}/submissions`);
 }
 
+export async function deleteSubmission(
+  submissionId: string
+): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(
+    `/api/submissions/${encodeURIComponent(submissionId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+}
+
 export async function clearProblemSubmissions(
   problemId: string
 ): Promise<{ status: string; deletedCount: number }> {

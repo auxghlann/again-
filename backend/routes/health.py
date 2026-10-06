@@ -36,7 +36,6 @@ def get_health() -> HealthResponse:
         status=overall_status,
         api="online",
         db=db_status,
-        postgres=postgres_status,
         runner=runner_status,
         runner_python=python_status,
         version="1.0.0",

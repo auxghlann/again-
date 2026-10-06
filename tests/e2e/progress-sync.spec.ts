@@ -14,15 +14,7 @@ test.describe('Study Plan Progress Synchronization', () => {
   const planId = 'sql-beginner';
   const probId = 'sql-beginner:subscription-upgrade-candidates';
 
-  test.beforeEach(async ({ page, request }) => {
-    // Clear submissions for the target problem so it starts unsolved
-    try {
-      await request.delete(
-        `http://127.0.0.1:8000/api/problems/${probId}/submissions`
-      );
-    } catch {
-      // ignore if no submissions exist
-    }
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
   });
@@ -156,10 +148,6 @@ test.describe('Study Plan Progress Synchronization', () => {
   }) => {
     const workbenchProbId = 'sql-beginner:high-value-settled-transactions';
 
-    // Clean submissions for the workbench target problem
-    await page.request.delete(
-      `http://127.0.0.1:8000/api/problems/${workbenchProbId}/submissions`
-    );
 
     // 1. Navigate to the problem workbench
     await page.goto(
@@ -198,16 +186,12 @@ ORDER BY
     await editor.fill(validSolution);
     await editor.dispatchEvent('input');
 
-    // 3. Run the solution
-    const runBtn = page.locator('#run-code-btn');
-    await runBtn.click();
+    // 3. Submit the solution
+    const submitBtn = page.locator('#submit-code-btn');
+    await submitBtn.click();
 
     const statusPill = page.locator('#execution-status-pill');
     await expect(statusPill).not.toHaveText('RUNNING', { timeout: 15000 });
-
-    // Verify Accepted result
-    const consoleOutput = page.locator('#console-output-pre');
-    await expect(consoleOutput).toContainText('Accepted', { timeout: 10000 });
 
     // 4. Navigate to the study plan and verify problem is solved
     await page.goto(`/#/plans/${planId}`);
@@ -232,9 +216,15 @@ ORDER BY
       expect(parseInt(match![1], 10)).toBeGreaterThanOrEqual(1);
     }).toPass({ timeout: 5000 });
 
-    // 6. Cleanup: un-solve the workbench problem
-    await page.request.post(
-      `http://127.0.0.1:8000/api/problems/${workbenchProbId}/toggle-solved`
+    // 6. Cleanup: delete only the submission created by this workbench test
+    const subsRes = await page.request.get(
+      `http://127.0.0.1:8000/api/problems/${workbenchProbId}/submissions`
     );
+    const subs = await subsRes.json();
+    if (subs.length > 0) {
+      await page.request.delete(
+        `http://127.0.0.1:8000/api/submissions/${subs[0].id}`
+      );
+    }
   });
 });

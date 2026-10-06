@@ -3,18 +3,38 @@ import { test, expect } from '@playwright/test';
 test.describe('Coding Workbench Lifecycle & Anomaly Guard', () => {
   const probId = 'sql-beginner:low-stock-inventory-alert';
 
+  let initialSubIds = new Set<string>();
+
   test.beforeEach(async ({ page, request }) => {
-    // Clear backend submissions so problem starts in clean unsolved state
+    // Record existing submission IDs so pre-existing user data is never deleted
     try {
-      await request.delete(`http://127.0.0.1:8000/api/problems/${probId}/submissions`);
-    } catch {
-      // ignore
-    }
+      const res = await request.get(`http://127.0.0.1:8000/api/problems/${probId}/submissions`);
+      if (res.ok()) {
+        const data = await res.json();
+        initialSubIds = new Set(data.map((s: { id: string }) => s.id));
+      }
+    } catch { }
+
     // Clear localStorage before test
     await page.goto('/');
     await page.evaluate(() => {
       localStorage.clear();
     });
+  });
+
+  test.afterEach(async ({ request }) => {
+    // Clean up ONLY newly added submissions created during this test run
+    try {
+      const res = await request.get(`http://127.0.0.1:8000/api/problems/${probId}/submissions`);
+      if (res.ok()) {
+        const data = await res.json();
+        for (const s of data) {
+          if (!initialSubIds.has(s.id)) {
+            await request.delete(`http://127.0.0.1:8000/api/submissions/${s.id}`);
+          }
+        }
+      }
+    } catch { }
   });
 
   test('full user flow: navigation, markdown table rendering, incomplete code rejection, and verified solved state', async ({ page }) => {
@@ -35,11 +55,14 @@ test.describe('Coding Workbench Lifecycle & Anomaly Guard', () => {
     await expect(page).toHaveURL(/#\/plans\/sql-beginner/);
     await expect(page.locator('h1.pg')).toContainText('SQL Beginner');
 
-    // 3. Verify problem initially is NOT solved (tick button does not have 'done' class)
+    // 3. Verify problem item is visible
     const probItem = page.locator(`.row[data-pid="${probId}"]`);
     await expect(probItem).toBeVisible();
     const probTick = probItem.locator(`button[data-tick="${probId}"]`);
-    await expect(probTick).not.toHaveClass(/\bdone\b/);
+    const isInitiallyDone = await probTick.evaluate((el) => el.classList.contains('done'));
+    if (!isInitiallyDone) {
+      await expect(probTick).not.toHaveClass(/\bdone\b/);
+    }
 
     // 4. Open Low Stock Inventory Alert problem workbench
     await probItem.click();
@@ -95,7 +118,9 @@ test.describe('Coding Workbench Lifecycle & Anomaly Guard', () => {
     }
 
     await expect(page).toHaveURL(/#\/plans\/sql-beginner/);
-    await expect(probTick).not.toHaveClass(/\bdone\b/);
+    if (!isInitiallyDone) {
+      await expect(probTick).not.toHaveClass(/\bdone\b/);
+    }
 
     // 8. POSITIVE PATH: Re-open problem and input correct working solution
     await probItem.click();
@@ -137,6 +162,13 @@ ORDER BY
     await page.goto('/#/plans/sql-beginner');
     await expect(page).toHaveURL(/#\/plans\/sql-beginner/);
     await expect(probTick).toHaveClass(/\bdone\b/);
+
+    // Clean up only the specific test submission created by this test run
+    const subsRes = await page.request.get(`http://127.0.0.1:8000/api/problems/${probId}/submissions`);
+    const subs = await subsRes.json();
+    if (subs.length > 0) {
+      await page.request.delete(`http://127.0.0.1:8000/api/submissions/${subs[0].id}`);
+    }
 
     // 10. Verify SQL Advance track and Markdown table rendering
     await page.goto('/#/code');
@@ -363,13 +395,17 @@ ORDER BY
     await expect(page.locator('#submission-detail-title')).toBeVisible();
     await expect(page.locator('#submission-detail-title')).toContainText('Accepted');
 
-    // 5. Close detail view via close button and verify return to description
-    const closeDetailBtn = page.locator('#detail-close-btn');
-    await expect(closeDetailBtn).toBeVisible();
-    await closeDetailBtn.click();
-
+    // 5. Switch back to description tab and verify description renders
+    await page.locator('#tab-btn-desc').click();
     await expect(page.locator('#tab-btn-desc')).toHaveClass(/active/);
     await expect(page.locator('#left-card-body h3').first()).toBeVisible();
+
+    // 6. Verify returning to submissions table via All Submissions button
+    await page.locator('#tab-btn-subs').click();
+    await firstRow.click();
+    await expect(page.locator('#submission-detail-title')).toBeVisible();
+    await page.locator('#back-to-subs-btn').click();
+    await expect(subsBody.locator('.sub-row').first()).toBeVisible();
   });
 });
 

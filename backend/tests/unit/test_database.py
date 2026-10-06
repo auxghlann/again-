@@ -1,8 +1,7 @@
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from backend.db.database import get_engine, init_db
 from backend.db.models import (
     CodingProblem,
     PracticeTopic,
@@ -12,19 +11,6 @@ from backend.db.models import (
     TestCase,
     UserCodingSubmission,
 )
-
-
-@pytest.fixture
-def db_session():
-    """Provides a fresh in-memory SQLite session with initialized schema."""
-    engine = get_engine("sqlite:///:memory:")
-    init_db(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    session = session_factory()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def test_init_db_creates_all_tables_and_indexes(db_session: Session):
@@ -45,11 +31,8 @@ def test_init_db_creates_all_tables_and_indexes(db_session: Session):
         assert table in tables, f"Expected table '{table}' to be created"
 
 
-def test_foreign_keys_pragma_enforced(db_session: Session):
+def test_foreign_keys_enforced(db_session: Session):
     """Verifies that foreign key enforcement rejects orphaned child inserts."""
-    result = db_session.execute(sa.text("PRAGMA foreign_keys;")).scalar()
-    assert result == 1, "PRAGMA foreign_keys must be active"
-
     # Attempt inserting a question for a non-existent topic
     orphan = QuizQuestion(
         id="orphan-q1",
@@ -62,6 +45,7 @@ def test_foreign_keys_pragma_enforced(db_session: Session):
     with pytest.raises(sa.exc.IntegrityError):
         db_session.flush()
     db_session.rollback()
+    db_session.begin_nested()
 
 
 def test_cascade_delete_practice_topic_deletes_questions_and_progress(db_session: Session):
@@ -91,7 +75,7 @@ def test_cascade_delete_practice_topic_deletes_questions_and_progress(db_session
         answers_json={"0": {"value": 0, "correct": True}},
     )
     db_session.add_all([question, progress])
-    db_session.commit()
+    db_session.flush()
 
     # Verify rows exist
     assert db_session.get(QuizQuestion, "q1") is not None
@@ -100,7 +84,8 @@ def test_cascade_delete_practice_topic_deletes_questions_and_progress(db_session
     # Delete parent topic
     t1 = db_session.get(PracticeTopic, "t1")
     db_session.delete(t1)
-    db_session.commit()
+    db_session.flush()
+    db_session.expire_all()
 
     # Verify cascaded deletion
     assert db_session.get(QuizQuestion, "q1") is None
@@ -138,12 +123,12 @@ def test_cascade_delete_coding_problem_deletes_cases_and_submissions(db_session:
         submitted_code="pass",
     )
     db_session.add_all([test_case, submission])
-    db_session.commit()
+    db_session.flush()
 
-    # Delete coding problem
     p1 = db_session.get(CodingProblem, "p1")
     db_session.delete(p1)
-    db_session.commit()
+    db_session.flush()
+    db_session.expire_all()
 
     # Verify cascaded deletion
     assert db_session.get(TestCase, "tc1") is None
@@ -174,12 +159,12 @@ def test_study_plan_delete_sets_problem_plan_id_to_null(db_session: Session):
         canonical_solution="pass",
     )
     db_session.add(problem)
-    db_session.commit()
+    db_session.flush()
 
-    # Delete study plan
     pl = db_session.get(StudyPlan, "plan1")
     db_session.delete(pl)
-    db_session.commit()
+    db_session.flush()
+    db_session.expire_all()
 
     # Verify problem remains and plan_id is now None
     prob = db_session.get(CodingProblem, "p1")

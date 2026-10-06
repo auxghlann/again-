@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db.database import init_db
-from backend.db.seed import seed_db
 from backend.routes.catalog import router as catalog_router
 from backend.routes.execute import router as execute_router
 from backend.routes.health import router as health_router
@@ -15,7 +14,6 @@ from backend.routes.quiz import router as quiz_router
 async def lifespan(app: FastAPI):
     """Initializes tables and seeds canonical data on startup non-destructively."""
     init_db()
-    seed_db(reset_coding=False)
     yield
 
 

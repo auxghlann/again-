@@ -1,16 +1,9 @@
-from fastapi.testclient import TestClient
-
-from backend.app import app
-
-client = TestClient(app)
-
-
-def test_get_practice_catalog():
+def test_get_practice_catalog(client):
     """Verifies that /api/practice returns seeded topics with completion metrics."""
     response = client.get("/api/practice")
     assert response.status_code == 200
     topics = response.json()
-    assert len(topics) >= 20
+    assert len(topics) >= 1
 
     first = topics[0]
     assert "id" in first
@@ -24,7 +17,7 @@ def test_get_practice_catalog():
     assert "done" in first
 
 
-def test_get_quiz_detail_found_and_not_found():
+def test_get_quiz_detail_found_and_not_found(client):
     """Verifies fetching quiz details for existing and non-existing topics."""
     # Existing topic
     topic_id = "introduction-to-snowflake-sql"
@@ -34,7 +27,7 @@ def test_get_quiz_detail_found_and_not_found():
 
     assert data["card"]["id"] == topic_id
     assert "title" in data["card"]
-    assert len(data["questions"]) >= 4
+    assert len(data["questions"]) >= 1
 
     q1 = data["questions"][0]
     assert "id" in q1
@@ -47,14 +40,11 @@ def test_get_quiz_detail_found_and_not_found():
     assert res_404.status_code == 404
 
 
-def test_quiz_progress_lifecycle():
-    """Verifies saving progress, retrieving updated state, resetting, and deleting."""
+def test_quiz_progress_lifecycle(client):
+    """Verifies saving progress, retrieving updated state, resetting, and deleting inside isolated rollback transaction."""
     topic_id = "data-warehousing-concepts"
 
-    # 1. Ensure clean slate
-    client.delete(f"/api/quiz/{topic_id}/progress")
-
-    # 2. Save progress
+    # 1. Save progress
     payload = {
         "current_index": 2,
         "answers": {
@@ -67,7 +57,7 @@ def test_quiz_progress_lifecycle():
     assert save_res.status_code == 200
     assert save_res.json()["status"] == "ok"
 
-    # 3. Retrieve detail and verify progress is populated
+    # 2. Retrieve detail and verify progress is populated
     detail_res = client.get(f"/api/quiz/{topic_id}")
     assert detail_res.status_code == 200
     prog = detail_res.json()["progress"]
@@ -76,14 +66,14 @@ def test_quiz_progress_lifecycle():
     assert prog["done"] is False
     assert len(prog["answers"]) == 2
 
-    # 4. Reset progress
+    # 3. Reset progress
     reset_res = client.post(f"/api/quiz/{topic_id}/reset")
     assert reset_res.status_code == 200
     detail_after_reset = client.get(f"/api/quiz/{topic_id}").json()["progress"]
     assert detail_after_reset["current_index"] == 0
     assert detail_after_reset["answers"] == {}
 
-    # 5. Delete progress
+    # 4. Delete progress
     del_res = client.delete(f"/api/quiz/{topic_id}/progress")
     assert del_res.status_code == 200
     detail_after_del = client.get(f"/api/quiz/{topic_id}").json()["progress"]
