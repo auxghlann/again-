@@ -1,13 +1,23 @@
 import { getStudyPlans } from '../api';
 import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
-import { getState, setState } from '../state';
+import { getCodeCatalogFilter, getState, setCodeCatalogFilter, setState } from '../state';
 import type { StudyPlanSummary } from '../types';
 
-const CODE_LANG_CHIPS = ['All', 'SQL', 'Python', 'PySpark'];
+function getAvailableLanguages(planList: StudyPlanSummary[]): string[] {
+  const langs = new Set<string>();
+  for (const p of planList) {
+    const lang = (p.language || p.category || '').trim();
+    if (lang) {
+      langs.add(lang);
+    }
+  }
+  return ['All', ...Array.from(langs).sort()];
+}
 
-let activeLangChip = 'All';
-let codeSearchQuery = '';
+const initialCodeFilter = getCodeCatalogFilter();
+let activeLangChip = initialCodeFilter.language;
+let codeSearchQuery = initialCodeFilter.search;
 
 export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
   let plans: StudyPlanSummary[] = getState().studyPlans;
@@ -85,10 +95,16 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
   }
 
   function renderView(): void {
+    const availableLanguages = getAvailableLanguages(plans);
+    if (!availableLanguages.includes(activeLangChip)) {
+      activeLangChip = 'All';
+      setCodeCatalogFilter(activeLangChip, codeSearchQuery);
+    }
+
     const filtered = filterPlans();
     const countText = `${filtered.length} Study plan${filtered.length === 1 ? '' : 's'}`;
 
-    const chipsHtml = CODE_LANG_CHIPS.map(
+    const chipsHtml = availableLanguages.map(
       (c) => {
         const isActive = c === activeLangChip;
         const chipClasses = isActive
@@ -98,7 +114,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
       }
     ).join('');
 
-    const optionsHtml = CODE_LANG_CHIPS.map(
+    const optionsHtml = availableLanguages.map(
       (c) => `<option ${c === activeLangChip ? 'selected' : ''}>${escapeHtml(c)}</option>`
     ).join('');
 
@@ -116,7 +132,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
             const langIcon = category.toLowerCase().includes('sql') ? 'db' : 'brackets';
 
             const cardBorder = isInProgress ? 'border-brand-text shadow-xs' : 'border-brand-line hover:border-brand-muted/60';
-            const labelColor = isCompleted || isInProgress ? 'text-emerald-500' : 'text-brand-muted';
+            const labelColor = isCompleted || isInProgress ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-brand-muted';
             const btnClasses = isInProgress
               ? 'bg-brand-text text-brand-surface border-brand-text'
               : 'bg-brand-surface border-brand-line text-brand-text hover:bg-brand-surface2';
@@ -171,6 +187,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
         const btn = (e.target as HTMLElement).closest('[data-chip]') as HTMLButtonElement | null;
         if (btn) {
           activeLangChip = btn.dataset.chip || 'All';
+          setCodeCatalogFilter(activeLangChip, codeSearchQuery);
           renderView();
         }
       });
@@ -180,6 +197,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
     if (sel) {
       sel.onchange = () => {
         activeLangChip = sel.value;
+        setCodeCatalogFilter(activeLangChip, codeSearchQuery);
         renderView();
       };
     }
@@ -188,6 +206,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
     if (searchInput) {
       searchInput.oninput = () => {
         codeSearchQuery = searchInput.value;
+        setCodeCatalogFilter(activeLangChip, codeSearchQuery);
         renderView();
         // Restore focus
         const nextInp = container.querySelector('#code-search') as HTMLInputElement | null;

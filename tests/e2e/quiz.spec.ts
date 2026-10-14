@@ -13,14 +13,14 @@ test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
     await expect(page.locator('.topbar')).toContainText('Practice');
 
     // 2. Test domain filter chip interaction
-    const pythonChip = page.locator('.f-chips button', { hasText: 'Python' });
-    if (await pythonChip.isVisible()) {
-      await pythonChip.click();
-      await expect(pythonChip).toHaveClass(/\bon\b/);
+    const theoryChip = page.locator('#practice-chips button', { hasText: 'Theory' });
+    if (await theoryChip.isVisible()) {
+      await theoryChip.click();
+      await expect(theoryChip).toHaveClass(/\bon\b/);
     }
 
     // 3. Select a Practice topic card and capture initial progress to restore after test
-    const topicSlug = 'python-dictionary-comprehension';
+    const topicSlug = 'data-warehouse-basics';
     const initRes = await page.request.get(`http://127.0.0.1:8000/api/quiz/${topicSlug}`);
     const initialProgress = initRes.ok() ? (await initRes.json()).progress : null;
 
@@ -29,7 +29,7 @@ test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
     await targetCard.click();
 
     // Verify hash route changed to quiz
-    await expect(page).toHaveURL(/#\/quiz\/python-dictionary-comprehension/);
+    await expect(page).toHaveURL(/#\/quiz\/data-warehouse-basics/);
 
     // 4. Auto-wait for quiz question container and question dots
     const dots = page.locator('.qz-dots span');
@@ -62,6 +62,12 @@ test.describe('Practice Quiz Lifecycle & Feedback Flow', () => {
       await expect(feedbackBanner).toBeVisible();
       const feedbackText = await feedbackBanner.innerText();
       expect(feedbackText.length).toBeGreaterThan(5);
+
+      // Verify selected option reveals evaluated visual state
+      const evaluatedOption = page.locator('.qz-opt.correct, .qz-opt.wrong, .qz-tf button.correct, .qz-tf button.wrong');
+      if ((await evaluatedOption.count()) > 0) {
+        await expect(evaluatedOption.first()).toBeVisible();
+      }
 
       // Advance to next question or finish
       const nextBtn = page.locator('#quiz-next-btn');

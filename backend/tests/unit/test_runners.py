@@ -180,3 +180,34 @@ class Solution:
     assert result["status"] == "Accepted"
     assert result["passed_count"] == 1
 
+
+def test_all_study_plan_coding_problems_canonical_solutions_pass():
+    """Verifies all 70 SQL coding problems across all 5 study plans execute cleanly and pass expected outputs."""
+    from backend.populate_catalog.sql_advance import PROBLEMS as ADV_PROBLEMS
+    from backend.populate_catalog.sql_beginner import PROBLEMS as BEG_PROBLEMS
+    from backend.populate_catalog.sql_data_manipulation import PROBLEMS as MANIP_PROBLEMS
+    from backend.populate_catalog.sql_dates import PROBLEMS as DATES_PROBLEMS
+    from backend.populate_catalog.sql_intermediate import PROBLEMS as INT_PROBLEMS
+
+
+    all_problems = (
+        BEG_PROBLEMS
+        + INT_PROBLEMS
+        + ADV_PROBLEMS
+        + DATES_PROBLEMS
+        + MANIP_PROBLEMS
+    )
+    assert len(all_problems) == 70
+
+    for p in all_problems:
+        tc = p["test_cases"][0]
+        result = run_sql_sandbox(
+            user_sql=p["canonical_solution"],
+            setup_sql=p["setup_sql"],
+            canonical_sql=p["canonical_solution"],
+            expected_rows=tc["expected_output_json"]["rows"],
+        )
+        assert result["passed"] is True, f"Problem {p['id']} failed: {result.get('error')} diff: {result.get('diff')}"
+        assert result["status"] == "Accepted"
+
+

@@ -62,3 +62,6 @@ Thumbs.db
 
 # Dynamic & custom seed modules
 backend/seed/
+
+# Local catalog population modules
+backend/populate_catalog/

@@ -196,8 +196,9 @@ export function buildSqlConsoleTables(
     expectedTable = formatAsciiTable(expCols, res.expected_rows);
   } else if (tc) {
     const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
-    if (tcOut && typeof tcOut === 'object' && Array.isArray((tcOut as any).columns)) {
-      expectedTable = formatAsciiTable((tcOut as any).columns, (tcOut as any).rows || []);
+    const tcObj = tcOut as { columns?: string[]; rows?: Record<string, unknown>[] } | null;
+    if (tcObj && typeof tcObj === 'object' && Array.isArray(tcObj.columns)) {
+      expectedTable = formatAsciiTable(tcObj.columns, tcObj.rows || []);
     } else if (typeof tcOut === 'string') {
       expectedTable = tcOut;
     } else if (tcOut) {

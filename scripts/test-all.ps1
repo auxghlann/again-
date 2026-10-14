@@ -83,7 +83,15 @@ if (-not $SkipBackend) {
 }
 
 # ----------------------------------------------------
-# STAGE 2: Frontend TypeScript Validation
+# STAGE 2: Frontend ESLint Validation
+# ----------------------------------------------------
+Run-Stage "Frontend ESLint Validation (npm run lint)" {
+    npm run lint
+    if ($LASTEXITCODE -ne 0) { throw "ESLint found errors or styling issues." }
+}
+
+# ----------------------------------------------------
+# STAGE 3: Frontend TypeScript Validation
 # ----------------------------------------------------
 Run-Stage "Frontend Type Check (tsc --noEmit)" {
     npx tsc --noEmit
@@ -91,7 +99,7 @@ Run-Stage "Frontend Type Check (tsc --noEmit)" {
 }
 
 # ----------------------------------------------------
-# STAGE 3: Frontend Playwright E2E Suite
+# STAGE 4: Frontend Playwright E2E Suite
 # ----------------------------------------------------
 if (-not $SkipE2E) {
     Run-Stage "Frontend Playwright E2E Suite" {
