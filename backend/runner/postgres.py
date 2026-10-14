@@ -48,7 +48,7 @@ def run_sql_sandbox(
     # 1. Connect to PostgreSQL
     try:
         target_url = DATABASE_URL.replace("+psycopg2", "")
-        conn = psycopg2.connect(target_url, connect_timeout=3)
+        conn = psycopg2.connect(target_url, connect_timeout=5)
     except psycopg2.OperationalError as e:
         return {
             "passed": False,

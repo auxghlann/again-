@@ -1,71 +1,23 @@
 import { getPracticeTopics } from '../api';
 import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
-import { getState, setState } from '../state';
+import { getPracticeCatalogFilter, getState, setPracticeCatalogFilter, setState } from '../state';
 import type { PracticeTopicCard } from '../types';
 
-const PRACTICE_TOPIC_CHIPS = [
-  'All',
-  'Python',
-  'SQL',
-  'R',
-  'Power BI',
-  'Tableau',
-  'Excel',
-  'AWS',
-  'Azure',
-  'Snowflake',
-  'Java',
-  'Docker',
-  'Git',
-  'Theory',
-];
-
-const TOPIC_ICONS: Record<string, string> = {
-  snowflake: 'snow',
-  theory: 'book',
-  python: 'brackets',
-  sql: 'db',
-  'power bi': 'chart',
-  tableau: 'chart',
-  excel: 'table',
-  aws: 'cloud',
-  azure: 'cloud',
-  java: 'cup',
-  docker: 'box',
-  git: 'git',
-  r: 'chart',
-};
-
-function getTopicIcon(title: string): string {
-  const lower = title.toLowerCase();
-  for (const [key, ic] of Object.entries(TOPIC_ICONS)) {
-    if (lower.includes(key)) {
-      return ic;
+function getAvailableTopics(topicList: PracticeTopicCard[]): string[] {
+  const categories = new Set<string>();
+  for (const t of topicList) {
+    const cat = (t.topic || t.tool || '').trim();
+    if (cat) {
+      categories.add(cat);
     }
   }
-  return 'book';
+  return ['All', ...Array.from(categories).sort()];
 }
 
-function deriveTopicCategory(title: string): string {
-  const lower = title.toLowerCase();
-  if (lower.includes('python') || lower.includes('pandas')) return 'Python';
-  if (lower.includes('sql') || lower.includes('database') || lower.includes('joins')) return 'SQL';
-  if (lower.includes('snowflake')) return 'Snowflake';
-  if (lower.includes('power bi')) return 'Power BI';
-  if (lower.includes('tableau')) return 'Tableau';
-  if (lower.includes('excel')) return 'Excel';
-  if (lower.includes('aws') || lower.includes('s3')) return 'AWS';
-  if (lower.includes('azure')) return 'Azure';
-  if (lower.includes('java')) return 'Java';
-  if (lower.includes('docker')) return 'Docker';
-  if (lower.includes('git')) return 'Git';
-  if (lower.includes(' r') || lower.startsWith('r ') || lower.includes('in r')) return 'R';
-  return 'Theory';
-}
-
-let activeFilterChip = 'All';
-let searchQuery = '';
+const initialPracticeFilter = getPracticeCatalogFilter();
+let activeFilterChip = initialPracticeFilter.topic;
+let searchQuery = initialPracticeFilter.search;
 
 export async function renderPracticeCatalog(container: HTMLElement): Promise<void> {
   let topics: PracticeTopicCard[] = getState().practiceTopics;
@@ -120,18 +72,29 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
   function filterTopics(): PracticeTopicCard[] {
     const q = searchQuery.trim().toLowerCase();
     return topics.filter((t) => {
-      const category = deriveTopicCategory(t.title);
-      const matchesCategory = activeFilterChip === 'All' || category === activeFilterChip;
-      const matchesSearch = !q || t.title.toLowerCase().includes(q) || category.toLowerCase().includes(q);
+      const category = (t.topic || t.tool || 'Practice').trim();
+      const matchesCategory =
+        activeFilterChip === 'All' ||
+        category.toLowerCase() === activeFilterChip.toLowerCase();
+      const matchesSearch =
+        !q ||
+        t.title.toLowerCase().includes(q) ||
+        category.toLowerCase().includes(q);
       return matchesCategory && matchesSearch;
     });
   }
 
   function renderView(): void {
+    const availableTopics = getAvailableTopics(topics);
+    if (!availableTopics.includes(activeFilterChip)) {
+      activeFilterChip = 'All';
+      setPracticeCatalogFilter(activeFilterChip, searchQuery);
+    }
+
     const filtered = filterTopics();
     const countText = `${filtered.length} Practice session${filtered.length === 1 ? '' : 's'}`;
 
-    const chipsHtml = PRACTICE_TOPIC_CHIPS.map(
+    const chipsHtml = availableTopics.map(
       (c) => {
         const isActive = c === activeFilterChip;
         const chipClasses = isActive
@@ -141,7 +104,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
       }
     ).join('');
 
-    const optionsHtml = PRACTICE_TOPIC_CHIPS.map(
+    const optionsHtml = availableTopics.map(
       (c) => `<option ${c === activeFilterChip ? 'selected' : ''}>${escapeHtml(c)}</option>`
     ).join('');
 
@@ -154,12 +117,12 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
             const isInProgress = !isCompleted && answeredQ > 0;
             const stateLabel = isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : 'PRACTICE';
             const btnLabel = isCompleted ? 'Review' : isInProgress ? 'Continue' : 'Start';
-            const ic = card.icon || getTopicIcon(card.title);
+            const ic = card.icon || 'book';
             const percent = totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0;
-            const category = card.topic || deriveTopicCategory(card.title);
+            const category = card.topic || card.tool || 'Practice';
 
             const cardBorder = isInProgress ? 'border-brand-text shadow-xs' : 'border-brand-line hover:border-brand-muted/60';
-            const labelColor = isCompleted || isInProgress ? 'text-emerald-500' : 'text-brand-muted';
+            const labelColor = isCompleted || isInProgress ? 'text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-brand-muted';
             const btnClasses = isInProgress
               ? 'bg-brand-text text-brand-surface border-brand-text'
               : 'bg-brand-surface border-brand-line text-brand-text hover:bg-brand-surface2';
@@ -213,6 +176,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
         const btn = (e.target as HTMLElement).closest('[data-chip]') as HTMLButtonElement | null;
         if (btn) {
           activeFilterChip = btn.dataset.chip || 'All';
+          setPracticeCatalogFilter(activeFilterChip, searchQuery);
           renderView();
         }
       });
@@ -222,6 +186,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
     if (sel) {
       sel.onchange = () => {
         activeFilterChip = sel.value;
+        setPracticeCatalogFilter(activeFilterChip, searchQuery);
         renderView();
       };
     }
@@ -230,6 +195,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
     if (searchInput) {
       searchInput.oninput = () => {
         searchQuery = searchInput.value;
+        setPracticeCatalogFilter(activeFilterChip, searchQuery);
         renderView();
         // Restore focus
         const nextInp = container.querySelector('#practice-search') as HTMLInputElement | null;

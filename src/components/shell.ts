@@ -87,7 +87,7 @@ export function renderSidebar(activeNav: string): string {
     <aside class="side bg-[#081120] text-[#c9d3e4] flex flex-col ${isCollapsed ? 'p-2' : 'p-4'} min-h-0 select-none border-r border-[#1b2740] shrink-0 transition-all duration-200">
       <div class="brand flex items-center ${isCollapsed ? 'justify-center flex-col gap-3' : 'justify-between'} pt-0.5 pb-4 tracking-tight border-b border-[#1b2740]/40 mb-2">
         <div class="flex items-center gap-2 font-bold text-lg text-white ${isCollapsed ? 'px-0' : 'px-1'}">
-          <i class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></i>
+          <img src="/again-icon.png" alt="again!" class="w-6 h-6 object-contain shrink-0 select-none" />
           ${isCollapsed ? '' : `<span class="max-[900px]:hidden font-mono tracking-tight">again!</span>`}
         </div>
         <button type="button" id="sidebar-collapse-btn" class="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer" title="${collapseTitle}" aria-label="${collapseTitle}">

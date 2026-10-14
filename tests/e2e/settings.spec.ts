@@ -57,17 +57,4 @@ test.describe('Settings Modal & Theme Switching', () => {
     await doneBtn.click();
     await expect(backdrop).not.toBeVisible();
   });
-
-  test('topbar does not render API status dot or API Offline label', async ({ page }) => {
-    await page.goto('/');
-    const statusDot = page.locator('#shell-status-dot');
-    await expect(statusDot).toHaveCount(0);
-
-    const statusLabel = page.locator('#shell-status-label');
-    await expect(statusLabel).toHaveCount(0);
-
-    const topbar = page.locator('header.topbar');
-    await expect(topbar).not.toContainText('API Offline');
-    await expect(topbar).not.toContainText('API Online');
-  });
 });

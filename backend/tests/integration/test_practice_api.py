@@ -20,7 +20,7 @@ def test_get_practice_catalog(client):
 def test_get_quiz_detail_found_and_not_found(client):
     """Verifies fetching quiz details for existing and non-existing topics."""
     # Existing topic
-    topic_id = "introduction-to-snowflake-sql"
+    topic_id = "data-warehouse-basics"
     response = client.get(f"/api/quiz/{topic_id}")
     assert response.status_code == 200
     data = response.json()
@@ -42,7 +42,7 @@ def test_get_quiz_detail_found_and_not_found(client):
 
 def test_quiz_progress_lifecycle(client):
     """Verifies saving progress, retrieving updated state, resetting, and deleting inside isolated rollback transaction."""
-    topic_id = "data-warehousing-concepts"
+    topic_id = "warehouse-architectures-properties"
 
     # 1. Save progress
     payload = {

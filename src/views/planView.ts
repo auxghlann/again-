@@ -3,9 +3,8 @@ import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
 import { showToast } from '../components/toast';
 import { navigate } from '../router';
-import { setState } from '../state';
+import { getPlanFilter, getPlanSort, setPlanFilter, setPlanSort, setState } from '../state';
 import type { StudyPlanDetailResponse } from '../types';
-
 
 export async function renderPlanView(container: HTMLElement, planId: string): Promise<void> {
   // Show loading state
@@ -20,7 +19,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
   );
   attachShellEvents(container);
 
-  let planData: StudyPlanDetailResponse | null = null;
+  let planData: StudyPlanDetailResponse;
   try {
     planData = await getStudyPlanDetail(planId);
   } catch {
@@ -45,11 +44,59 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
 
   const planTitle = planData.plan?.title || planData.title;
   const planDesc = planData.plan?.description || planData.subtitle || planData.title;
-  const planCategory = planData.plan?.category || planData.language || 'SQL';
   const problems = planData.problems || [];
+
+  let activeFilter = getPlanFilter(planId);
+  let activeSort = getPlanSort(planId);
+
+  const difficultyWeights: Record<string, number> = {
+    easy: 1,
+    medium: 2,
+    hard: 3,
+  };
 
   function countSolved(): number {
     return problems.filter((p) => !!p.solved).length;
+  }
+
+  function getFilteredAndSortedProblems() {
+    let list = [...problems];
+
+    // Filter
+    if (activeFilter === 'unsolved') {
+      list = list.filter((p) => !p.solved);
+    } else if (activeFilter === 'solved') {
+      list = list.filter((p) => !!p.solved);
+    } else if (activeFilter === 'easy') {
+      list = list.filter((p) => p.difficulty?.toLowerCase() === 'easy');
+    } else if (activeFilter === 'medium') {
+      list = list.filter((p) => p.difficulty?.toLowerCase() === 'medium');
+    } else if (activeFilter === 'hard') {
+      list = list.filter((p) => p.difficulty?.toLowerCase() === 'hard');
+    }
+
+    // Sort
+    if (activeSort === 'difficulty-asc') {
+      list.sort(
+        (a, b) =>
+          (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2) -
+          (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2)
+      );
+    } else if (activeSort === 'difficulty-desc') {
+      list.sort(
+        (a, b) =>
+          (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2) -
+          (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2)
+      );
+    } else if (activeSort === 'title-asc') {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (activeSort === 'title-desc') {
+      list.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (activeSort === 'status') {
+      list.sort((a, b) => (a.solved ? 1 : 0) - (b.solved ? 1 : 0));
+    }
+
+    return list;
   }
 
   function renderView(): void {
@@ -57,38 +104,38 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
     const percent = problems.length > 0 ? Math.round((solvedCount / problems.length) * 100) : 0;
     const startBtnText = solvedCount > 0 ? 'Continue' : 'Start';
 
-    const rowsHtml = problems
-      .map((p) => {
-        const pid = p.id || p.problemId || '';
-        const isDone = !!p.solved;
-        const diffColor =
-          p.difficulty === 'Easy'
-            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-            : p.difficulty === 'Medium'
-            ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
-            : 'text-rose-600 dark:text-rose-400 bg-rose-500/10';
+    const visibleProblems = getFilteredAndSortedProblems();
+    const countLabel =
+      activeFilter === 'all'
+        ? `${problems.length} Problems`
+        : `${visibleProblems.length} of ${problems.length} Problems`;
 
-        return `
-          <div class="row flex items-center gap-3.5 px-5 min-h-[58px] cursor-pointer hover:bg-brand-surface2/80 transition-colors" data-pid="${escapeHtml(pid)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(p.title)}">
-            <button type="button" class="tick shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-brand-muted/40 hover:border-brand-muted bg-transparent text-transparent'} ${isDone ? 'done' : ''}" data-tick="${escapeHtml(pid)}" aria-label="Mark ${escapeHtml(p.title)} as solved">
-              ${isDone ? icon('check', 12) : ''}
-            </button>
-            <div class="rt flex-1 min-w-0">
-              <div class="t text-sm font-semibold text-brand-text truncate">${escapeHtml(p.title)}</div>
-              <div class="tgs gap-1.5 mt-1 flex-wrap">
-                <span class="text-[11px] bg-brand-line/60 text-brand-muted px-2 py-0.5 rounded">${escapeHtml(p.difficulty)}</span>
-                <span class="text-[11px] bg-brand-line/60 text-brand-muted px-2 py-0.5 rounded">${escapeHtml(p.language || planCategory)}</span>
+    const rowsHtml = visibleProblems.length
+      ? visibleProblems
+          .map((p) => {
+            const pid = p.id || p.problemId || '';
+            const isDone = !!p.solved;
+            const diffColor =
+              p.difficulty === 'Easy'
+                ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
+                : p.difficulty === 'Medium'
+                ? 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                : 'text-rose-700 dark:text-rose-400 bg-rose-500/10';
+
+            return `
+              <div class="row flex items-center gap-3.5 px-5 min-h-[58px] cursor-pointer hover:bg-brand-surface2/80 transition-colors" data-pid="${escapeHtml(pid)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(p.title)}">
+                <button type="button" class="tick shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-brand-muted/40 hover:border-brand-muted bg-transparent text-transparent'} ${isDone ? 'done' : ''}" data-tick="${escapeHtml(pid)}" aria-label="Mark ${escapeHtml(p.title)} as solved">
+                  ${isDone ? icon('check', 12) : ''}
+                </button>
+                <div class="rt flex-1 min-w-0">
+                  <div class="t text-sm font-semibold text-brand-text truncate">${escapeHtml(p.title)}</div>
+                </div>
+                <span class="df text-[11px] font-semibold px-2.5 py-0.5 rounded capitalize ${diffColor} ${escapeHtml(p.difficulty)}">${escapeHtml(p.difficulty)}</span>
               </div>
-            </div>
-            <button type="button" class="sol inline-flex items-center gap-1.5 text-xs text-brand-muted hover:text-brand-text px-2 py-1 rounded transition-colors" data-sol>
-              ${icon('doc', 14)}
-              <span>Solution</span>
-            </button>
-            <span class="df text-[11px] font-semibold px-2.5 py-0.5 rounded capitalize ${diffColor} ${escapeHtml(p.difficulty)}">${escapeHtml(p.difficulty)}</span>
-          </div>
-        `;
-      })
-      .join('');
+            `;
+          })
+          .join('')
+      : `<div class="p-10 text-center text-sm text-brand-muted bg-brand-surface">No problems match the selected filter.</div>`;
 
     const contentHtml = `
       <div class="page p-6 max-w-5xl mx-auto w-full">
@@ -111,12 +158,33 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
           <span id="plan-prog-label" class="font-medium">${solvedCount} of ${problems.length} solved</span>
         </div>
 
-        <div class="tools flex items-center justify-between gap-3 my-4">
-          <div class="count text-xs font-semibold text-brand-text">${problems.length} Problems</div>
-          <label class="showtags flex items-center gap-2 text-xs text-brand-muted cursor-pointer select-none">
-            <input type="checkbox" id="plan-tags-toggle" class="rounded accent-emerald-500 cursor-pointer">
-            Show tags
-          </label>
+        <div class="tools flex items-center justify-between gap-3 flex-wrap my-4">
+          <div class="count text-xs font-semibold text-brand-text" id="plan-count">${countLabel}</div>
+          <div class="tools-r flex items-center gap-2.5 flex-wrap">
+            <label class="sel flex items-center gap-1.5 bg-brand-surface border border-brand-line rounded-lg px-2.5 h-8 text-xs text-brand-muted">
+              <span>Filter:</span>
+              <select id="plan-filter-sel" class="bg-transparent border-0 outline-none text-xs font-semibold text-brand-text cursor-pointer pr-1" aria-label="Filter problems">
+                <option value="all" ${activeFilter === 'all' ? 'selected' : ''}>All</option>
+                <option value="unsolved" ${activeFilter === 'unsolved' ? 'selected' : ''}>Unsolved</option>
+                <option value="solved" ${activeFilter === 'solved' ? 'selected' : ''}>Solved</option>
+                <option value="easy" ${activeFilter === 'easy' ? 'selected' : ''}>Easy</option>
+                <option value="medium" ${activeFilter === 'medium' ? 'selected' : ''}>Medium</option>
+                <option value="hard" ${activeFilter === 'hard' ? 'selected' : ''}>Hard</option>
+              </select>
+            </label>
+
+            <label class="sel flex items-center gap-1.5 bg-brand-surface border border-brand-line rounded-lg px-2.5 h-8 text-xs text-brand-muted">
+              <span>Sort:</span>
+              <select id="plan-sort-sel" class="bg-transparent border-0 outline-none text-xs font-semibold text-brand-text cursor-pointer pr-1" aria-label="Sort problems">
+                <option value="default" ${activeSort === 'default' ? 'selected' : ''}>Default</option>
+                <option value="difficulty-asc" ${activeSort === 'difficulty-asc' ? 'selected' : ''}>Difficulty (Easy &rarr; Hard)</option>
+                <option value="difficulty-desc" ${activeSort === 'difficulty-desc' ? 'selected' : ''}>Difficulty (Hard &rarr; Easy)</option>
+                <option value="title-asc" ${activeSort === 'title-asc' ? 'selected' : ''}>Title (A &rarr; Z)</option>
+                <option value="title-desc" ${activeSort === 'title-desc' ? 'selected' : ''}>Title (Z &rarr; A)</option>
+                <option value="status" ${activeSort === 'status' ? 'selected' : ''}>Status (Unsolved first)</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <div class="pl bg-brand-surface border border-brand-line rounded-xl overflow-hidden mt-4 divide-y divide-brand-line shadow-xs" id="problem-list-container">
@@ -152,11 +220,21 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
       };
     }
 
-    const tagsToggle = container.querySelector('#plan-tags-toggle') as HTMLInputElement | null;
-    const plContainer = container.querySelector('#problem-list-container');
-    if (tagsToggle && plContainer) {
-      tagsToggle.onchange = () => {
-        plContainer.classList.toggle('show', tagsToggle.checked);
+    const filterSel = container.querySelector('#plan-filter-sel') as HTMLSelectElement | null;
+    if (filterSel) {
+      filterSel.onchange = () => {
+        activeFilter = filterSel.value as typeof activeFilter;
+        setPlanFilter(planId, activeFilter);
+        renderView();
+      };
+    }
+
+    const sortSel = container.querySelector('#plan-sort-sel') as HTMLSelectElement | null;
+    if (sortSel) {
+      sortSel.onchange = () => {
+        activeSort = sortSel.value as typeof activeSort;
+        setPlanSort(planId, activeSort);
+        renderView();
       };
     }
 
@@ -185,12 +263,6 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
               showToast('Failed to update problem status');
             }
           }
-          return;
-        }
-
-        // Solution click
-        if (target.closest('[data-sol]')) {
-          showToast('Canonical solutions can be reviewed in the editor');
           return;
         }
 

@@ -31,7 +31,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
   );
   attachShellEvents(container);
 
-  let quizData: QuizDetailResponse | null = null;
+  let quizData: QuizDetailResponse;
   try {
     quizData = await getQuizDetail(topicId);
   } catch {
@@ -106,7 +106,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
     const contentHtml = `
       <div class="page qz-page p-6 max-w-xl mx-auto w-full">
         <div class="qz-card qz-result bg-brand-surface border border-brand-line rounded-2xl p-8 sm:p-12 text-center shadow-xs flex flex-col items-center">
-          <div class="c-label text-[10px] font-bold tracking-wider text-emerald-500 uppercase">COMPLETED</div>
+          <div class="c-label text-[10px] font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase">COMPLETED</div>
           <div class="qz-score text-5xl font-extrabold tracking-tight text-brand-text my-3">${score}/${total}</div>
           <p class="sub text-sm text-brand-muted max-w-md">You got ${score} out of ${total} questions right on "${escapeHtml(card.title)}".</p>
           <div class="btnrow flex items-center justify-center gap-3 mt-6">
@@ -164,7 +164,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
 
     let picked: string | null = isChecked ? saved.value : null;
 
-    let bodyHtml = '';
+    let bodyHtml: string;
     if (q.type === 'mcq' && q.options) {
       bodyHtml = `
         <div class="qz-opts flex flex-col gap-2.5 my-4" id="mcq-opts" role="radiogroup" aria-label="Question choices">
@@ -178,16 +178,16 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
               if (isChecked) {
                 if (isOptionCorrect) {
                   cls = 'correct';
-                  stateClasses = 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300';
-                  letterStateClasses = 'bg-emerald-500 text-white';
+                  stateClasses = 'border-emerald-500 bg-emerald-50 text-emerald-950 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-100';
+                  letterStateClasses = 'bg-emerald-600 text-white';
                 } else if (opt === saved.value) {
                   cls = 'wrong';
-                  stateClasses = 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300';
-                  letterStateClasses = 'bg-rose-500 text-white';
+                  stateClasses = 'border-rose-500 bg-rose-50 text-rose-950 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-100';
+                  letterStateClasses = 'bg-rose-600 text-white';
                 }
               } else if (isSelected) {
                 cls = 'sel';
-                stateClasses = 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
+                stateClasses = 'border-indigo-500 bg-indigo-50/80 text-indigo-950 dark:border-indigo-400 dark:bg-indigo-950/60 dark:text-indigo-100';
                 letterStateClasses = 'bg-indigo-600 text-white';
               }
               const letter = 'ABCD'[idx] || `${idx + 1}`;
@@ -195,7 +195,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
                 <button type="button" class="qz-opt flex items-center gap-3 text-left border rounded-xl p-3.5 text-sm font-medium w-full transition-all cursor-pointer ${stateClasses} ${cls}" data-opt="${escapeHtml(opt)}" role="radio" aria-checked="${isSelected}" ${isChecked ? 'disabled' : ''}>
                   <span class="qz-letter shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${letterStateClasses}">${letter}</span>
                   <span class="flex-1 min-w-0">${escapeHtml(opt)}</span>
-                  ${isChecked && isOptionCorrect ? `<span class="ic ml-auto shrink-0 text-emerald-600 dark:text-emerald-400">${icon('check', 15)}</span>` : ''}
+                  ${isChecked && isOptionCorrect ? `<span class="ic ml-auto shrink-0 text-emerald-700 dark:text-emerald-400">${icon('check', 15)}</span>` : ''}
                 </button>
               `;
             })
@@ -214,14 +214,14 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
               if (isChecked) {
                 if (isValCorrect) {
                   cls = 'correct';
-                  stateClasses = 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300';
+                  stateClasses = 'border-emerald-500 bg-emerald-50 text-emerald-950 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-100';
                 } else if (val.toLowerCase() === saved.value.toLowerCase()) {
                   cls = 'wrong';
-                  stateClasses = 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300';
+                  stateClasses = 'border-rose-500 bg-rose-50 text-rose-950 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-100';
                 }
               } else if (isSelected) {
                 cls = 'sel';
-                stateClasses = 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-200';
+                stateClasses = 'border-indigo-500 bg-indigo-50/80 text-indigo-950 dark:border-indigo-400 dark:bg-indigo-950/60 dark:text-indigo-100';
               }
               return `
                 <button type="button" class="flex-1 py-3.5 px-4 rounded-xl border font-bold text-sm transition-all cursor-pointer ${stateClasses} ${cls}" data-val="${val}" role="radio" aria-checked="${isSelected}" ${isChecked ? 'disabled' : ''}>
@@ -236,7 +236,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
       const val = isChecked ? saved.value : '';
       const cls = isChecked ? (saved.correct ? 'correct' : 'wrong') : '';
       const borderState = isChecked
-        ? (saved.correct ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300')
+        ? (saved.correct ? 'border-emerald-500 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100' : 'border-rose-500 bg-rose-50 text-rose-950 dark:bg-rose-950/60 dark:text-rose-100')
         : 'border-brand-line bg-brand-surface2 text-brand-text focus:border-indigo-500';
       const inputHtml = `</span><input id="fib-input" class="border border-b-2 border-b-brand-muted rounded-md px-3 py-1 font-mono text-sm min-w-[140px] text-center mx-1.5 outline-none transition-colors ${borderState} ${cls}" type="text" autocomplete="off" ${isChecked ? 'disabled' : ''} value="${escapeHtml(val)}" placeholder="type here"><span>`;
       const promptWithInput = escapeHtml(q.prompt).replace('___', inputHtml);
@@ -245,10 +245,14 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
 
     const feedbackHtml = isChecked
       ? `
-        <div class="qz-fb mt-4 p-4 rounded-xl text-xs leading-relaxed flex gap-3 items-start border ${saved.correct ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'}">
-          <span class="shrink-0 mt-0.5">${icon(saved.correct ? 'check' : 'left', 14)}</span>
+        <div class="qz-fb mt-4 p-4 rounded-xl text-xs leading-relaxed flex gap-3 items-start border ${
+          saved.correct
+            ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/50 text-emerald-950 dark:text-emerald-100'
+            : 'bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800/50 text-rose-950 dark:text-rose-100'
+        }">
+          <span class="shrink-0 mt-0.5 ${saved.correct ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}">${icon(saved.correct ? 'check' : 'left', 14)}</span>
           <div>
-            <b class="block font-bold mb-0.5">${saved.correct ? 'Correct.' : 'Not quite.'}</b>
+            <b class="block font-bold mb-0.5 ${saved.correct ? 'text-emerald-900 dark:text-emerald-200' : 'text-rose-900 dark:text-rose-200'}">${saved.correct ? 'Correct.' : 'Not quite.'}</b>
             ${escapeHtml(q.explain || q.explanation || '')}
           </div>
         </div>

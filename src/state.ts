@@ -120,3 +120,60 @@ export function setSidebarCollapsed(collapsed: boolean): void {
 export function toggleSidebar(): void {
   setSidebarCollapsed(!state.sidebarCollapsed);
 }
+
+export type PlanFilter = 'all' | 'unsolved' | 'solved' | 'easy' | 'medium' | 'hard';
+export type PlanSort = 'default' | 'difficulty-asc' | 'difficulty-desc' | 'title-asc' | 'title-desc' | 'status';
+
+const PLAN_FILTER_KEY_PREFIX = 'again_plan_filter_';
+const PLAN_SORT_KEY_PREFIX = 'again_plan_sort_';
+const CODE_LANG_KEY = 'again_code_lang_chip';
+const CODE_SEARCH_KEY = 'again_code_search';
+const PRACTICE_TOPIC_KEY = 'again_practice_topic_chip';
+const PRACTICE_SEARCH_KEY = 'again_practice_search';
+
+const VALID_PLAN_FILTERS: PlanFilter[] = ['all', 'unsolved', 'solved', 'easy', 'medium', 'hard'];
+const VALID_PLAN_SORTS: PlanSort[] = ['default', 'difficulty-asc', 'difficulty-desc', 'title-asc', 'title-desc', 'status'];
+
+export function getPlanFilter(planId: string): PlanFilter {
+  const val = localStorage.getItem(`${PLAN_FILTER_KEY_PREFIX}${planId}`) || localStorage.getItem('again_plan_filter');
+  return val && VALID_PLAN_FILTERS.includes(val as PlanFilter) ? (val as PlanFilter) : 'all';
+}
+
+export function setPlanFilter(planId: string, filter: PlanFilter): void {
+  localStorage.setItem(`${PLAN_FILTER_KEY_PREFIX}${planId}`, filter);
+  localStorage.setItem('again_plan_filter', filter);
+}
+
+export function getPlanSort(planId: string): PlanSort {
+  const val = localStorage.getItem(`${PLAN_SORT_KEY_PREFIX}${planId}`) || localStorage.getItem('again_plan_sort');
+  return val && VALID_PLAN_SORTS.includes(val as PlanSort) ? (val as PlanSort) : 'default';
+}
+
+export function setPlanSort(planId: string, sort: PlanSort): void {
+  localStorage.setItem(`${PLAN_SORT_KEY_PREFIX}${planId}`, sort);
+  localStorage.setItem('again_plan_sort', sort);
+}
+
+export function getCodeCatalogFilter(): { language: string; search: string } {
+  return {
+    language: localStorage.getItem(CODE_LANG_KEY) || 'All',
+    search: localStorage.getItem(CODE_SEARCH_KEY) || '',
+  };
+}
+
+export function setCodeCatalogFilter(language: string, search: string): void {
+  localStorage.setItem(CODE_LANG_KEY, language);
+  localStorage.setItem(CODE_SEARCH_KEY, search);
+}
+
+export function getPracticeCatalogFilter(): { topic: string; search: string } {
+  return {
+    topic: localStorage.getItem(PRACTICE_TOPIC_KEY) || 'All',
+    search: localStorage.getItem(PRACTICE_SEARCH_KEY) || '',
+  };
+}
+
+export function setPracticeCatalogFilter(topic: string, search: string): void {
+  localStorage.setItem(PRACTICE_TOPIC_KEY, topic);
+  localStorage.setItem(PRACTICE_SEARCH_KEY, search);
+}
