@@ -5,12 +5,10 @@ export function renderDashboard(container: HTMLElement): void {
   const plans = getState().studyPlans;
   const topics = getState().practiceTopics;
 
-  const totalProblems = plans.reduce((acc, p) => acc + (p.problemCount ?? p.total_problems ?? 0), 0);
-  const totalSolved = plans.reduce((acc, p) => acc + (p.completedCount ?? p.solved_count ?? 0), 0);
+  const totalProblems = plans.reduce((acc, p) => acc + (p.total_problems ?? 0), 0);
+  const totalSolved = plans.reduce((acc, p) => acc + (p.solved_count ?? 0), 0);
   const activePracticeCount = topics.filter(
-    (t) =>
-      (t.answered_count ?? t.completedCount ?? 0) > 0 &&
-      (t.answered_count ?? t.completedCount ?? 0) < (t.total_questions ?? t.totalQuestions ?? 4)
+    (t) => (t.answered_count ?? 0) > 0 && (t.answered_count ?? 0) < (t.total_questions ?? 4)
   ).length;
 
   const contentHtml = `

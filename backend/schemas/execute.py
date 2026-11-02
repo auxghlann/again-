@@ -1,5 +1,8 @@
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+
+SqlCellValue = Union[str, int, float, bool, None]
+SqlRow = Dict[str, SqlCellValue]
 
 
 class SqlRunRequest(BaseModel):
@@ -20,12 +23,12 @@ class SqlRunResponse(BaseModel):
     runtime_ms: int = Field(validation_alias=AliasChoices("runtime_ms", "runtimeMs", "durationMs"))
     duration_ms: Optional[int] = None
     columns: Optional[List[str]] = None
-    rows: Optional[List[Dict[str, Any]]] = None
-    expected_rows: Optional[List[Dict[str, Any]]] = None
+    rows: Optional[List[SqlRow]] = None
+    expected_rows: Optional[List[SqlRow]] = None
     diff: Optional[str] = None
     error: Optional[str] = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, __context: object) -> None:
         if self.duration_ms is None:
             self.duration_ms = self.runtime_ms
 
@@ -52,7 +55,6 @@ class PythonRunResponse(BaseModel):
     output: str
     error: Optional[str] = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, __context: object) -> None:
         if self.duration_ms is None:
             self.duration_ms = self.runtime_ms
-

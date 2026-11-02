@@ -4,7 +4,7 @@ import { escapeHtml, icon } from '../components/icons';
 import { showToast } from '../components/toast';
 import { navigate } from '../router';
 import { getPlanFilter, getPlanSort, setPlanFilter, setPlanSort, setState } from '../state';
-import type { StudyPlanDetailResponse } from '../types';
+import type { PlanProblemChecklistItem, StudyPlanDetailResponse } from '../types';
 
 export async function renderPlanView(container: HTMLElement, planId: string): Promise<void> {
   // Show loading state
@@ -55,47 +55,40 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
     hard: 3,
   };
 
+  const filterPredicates: Record<string, (p: PlanProblemChecklistItem) => boolean> = {
+    unsolved: (p) => !p.solved,
+    solved: (p) => !!p.solved,
+    easy: (p) => p.difficulty?.toLowerCase() === 'easy',
+    medium: (p) => p.difficulty?.toLowerCase() === 'medium',
+    hard: (p) => p.difficulty?.toLowerCase() === 'hard',
+  };
+
+  const sortComparators: Record<string, (a: PlanProblemChecklistItem, b: PlanProblemChecklistItem) => number> = {
+    'difficulty-asc': (a, b) =>
+      (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2) -
+      (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2),
+    'difficulty-desc': (a, b) =>
+      (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2) -
+      (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2),
+    'title-asc': (a, b) => a.title.localeCompare(b.title),
+    'title-desc': (a, b) => b.title.localeCompare(a.title),
+    status: (a, b) => (a.solved ? 1 : 0) - (b.solved ? 1 : 0),
+  };
+
   function countSolved(): number {
     return problems.filter((p) => !!p.solved).length;
   }
 
   function getFilteredAndSortedProblems() {
     let list = [...problems];
-
-    // Filter
-    if (activeFilter === 'unsolved') {
-      list = list.filter((p) => !p.solved);
-    } else if (activeFilter === 'solved') {
-      list = list.filter((p) => !!p.solved);
-    } else if (activeFilter === 'easy') {
-      list = list.filter((p) => p.difficulty?.toLowerCase() === 'easy');
-    } else if (activeFilter === 'medium') {
-      list = list.filter((p) => p.difficulty?.toLowerCase() === 'medium');
-    } else if (activeFilter === 'hard') {
-      list = list.filter((p) => p.difficulty?.toLowerCase() === 'hard');
+    const filterFn = filterPredicates[activeFilter];
+    if (filterFn) {
+      list = list.filter(filterFn);
     }
-
-    // Sort
-    if (activeSort === 'difficulty-asc') {
-      list.sort(
-        (a, b) =>
-          (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2) -
-          (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2)
-      );
-    } else if (activeSort === 'difficulty-desc') {
-      list.sort(
-        (a, b) =>
-          (difficultyWeights[b.difficulty?.toLowerCase() || ''] || 2) -
-          (difficultyWeights[a.difficulty?.toLowerCase() || ''] || 2)
-      );
-    } else if (activeSort === 'title-asc') {
-      list.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (activeSort === 'title-desc') {
-      list.sort((a, b) => b.title.localeCompare(a.title));
-    } else if (activeSort === 'status') {
-      list.sort((a, b) => (a.solved ? 1 : 0) - (b.solved ? 1 : 0));
+    const sortFn = sortComparators[activeSort];
+    if (sortFn) {
+      list.sort(sortFn);
     }
-
     return list;
   }
 
@@ -113,7 +106,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
     const rowsHtml = visibleProblems.length
       ? visibleProblems
           .map((p) => {
-            const pid = p.id || p.problemId || '';
+            const pid = p.id;
             const isDone = !!p.solved;
             const diffColor =
               p.difficulty === 'Easy'
@@ -214,7 +207,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
       startBtn.onclick = () => {
         const nextUnsolved = problems.find((p) => !p.solved) || problems[0];
         if (nextUnsolved) {
-          const nextPid = nextUnsolved.id || nextUnsolved.problemId || '';
+          const nextPid = nextUnsolved.id;
           navigate(`#/problem/${encodeURIComponent(nextPid)}`);
         }
       };
@@ -251,7 +244,7 @@ export async function renderPlanView(container: HTMLElement, planId: string): Pr
             tickBtn.disabled = true;
             try {
               const res = await toggleProblemSolved(pid);
-              const prob = problems.find((p) => (p.id || p.problemId) === pid);
+              const prob = problems.find((p) => p.id === pid);
               if (prob) {
                 prob.solved = res.solved;
               }

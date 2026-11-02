@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -12,14 +12,12 @@ router = APIRouter(tags=["catalog"])
 
 
 @router.get("/practice", response_model=List[PracticeTopicCard])
-def get_practice_catalog(db: Session = Depends(get_db_session)) -> List[PracticeTopicCard]:
+def get_practice_catalog(db: Session = Depends(get_db_session)) -> Any:
     """Returns all conceptual practice topic cards with completion metrics."""
-    topics = list_practice_topics(db)
-    return [PracticeTopicCard.model_validate(t) for t in topics]
+    return list_practice_topics(db)
 
 
 @router.get("/plans", response_model=List[StudyPlanSummary])
-def get_study_plans_catalog(db: Session = Depends(get_db_session)) -> List[StudyPlanSummary]:
+def get_study_plans_catalog(db: Session = Depends(get_db_session)) -> Any:
     """Returns all coding study plans with total and solved problem counts."""
-    plans = list_study_plans(db)
-    return [StudyPlanSummary.model_validate(p) for p in plans]
+    return list_study_plans(db)

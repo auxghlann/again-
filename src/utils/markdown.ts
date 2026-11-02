@@ -114,47 +114,9 @@ function tryParseTable(block: string): string | null {
 export function renderMarkdown(markdown: string): string {
   if (!markdown) return '';
 
-  // Normalize newlines
   const text = markdown.replace(/\r\n/g, '\n');
+  const parts = text.split(/(```[\s\S]*?```|\n\n+)/);
 
-  // Split into raw blocks by double newlines or code fences
-  const parts: string[] = [];
-  const lines = text.split('\n');
-  let currentBlock: string[] = [];
-  let inCodeFence = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.trim().startsWith('```')) {
-      if (inCodeFence) {
-        currentBlock.push(line);
-        parts.push(currentBlock.join('\n'));
-        currentBlock = [];
-        inCodeFence = false;
-      } else {
-        if (currentBlock.length > 0) {
-          parts.push(currentBlock.join('\n'));
-          currentBlock = [];
-        }
-        currentBlock.push(line);
-        inCodeFence = true;
-      }
-    } else if (inCodeFence) {
-      currentBlock.push(line);
-    } else if (line.trim() === '') {
-      if (currentBlock.length > 0) {
-        parts.push(currentBlock.join('\n'));
-        currentBlock = [];
-      }
-    } else {
-      currentBlock.push(line);
-    }
-  }
-  if (currentBlock.length > 0) {
-    parts.push(currentBlock.join('\n'));
-  }
-
-  // Render each block
   const rendered = parts.map((rawBlock) => {
     const trimmed = rawBlock.trim();
     if (!trimmed) return '';
@@ -175,39 +137,26 @@ export function renderMarkdown(markdown: string): string {
 
     const blockLines = trimmed.split('\n');
 
-    // Heading 1
-    if (trimmed.startsWith('# ')) {
-      return `<h1 class="text-xl font-bold tracking-tight text-brand-text mt-4 mb-2">${parseInline(trimmed.substring(2))}</h1>`;
-    }
-    // Heading 2
-    if (trimmed.startsWith('## ')) {
-      return `<h2 class="text-base font-bold tracking-tight text-brand-text mt-4 mb-2">${parseInline(trimmed.substring(3))}</h2>`;
-    }
-    // Heading 3
-    if (trimmed.startsWith('### ')) {
-      return `<h3 class="text-xs font-bold uppercase tracking-wider text-brand-muted mt-3 mb-1.5">${parseInline(trimmed.substring(4))}</h3>`;
+    // Headings
+    const hMatch = trimmed.match(/^(#{1,3})\s+(.*)$/);
+    if (hMatch) {
+      const level = hMatch[1].length;
+      const headingText = parseInline(hMatch[2]);
+      if (level === 1) return `<h1 class="text-xl font-bold tracking-tight text-brand-text mt-4 mb-2">${headingText}</h1>`;
+      if (level === 2) return `<h2 class="text-base font-bold tracking-tight text-brand-text mt-4 mb-2">${headingText}</h2>`;
+      return `<h3 class="text-xs font-bold uppercase tracking-wider text-brand-muted mt-3 mb-1.5">${headingText}</h3>`;
     }
 
     // Bullet list
-    const isBulletList = blockLines.every((l) => /^[-*]\s+/.test(l.trim()));
-    if (isBulletList) {
-      const items = blockLines.map((l) => l.trim().replace(/^[-*]\s+/, ''));
-      return `
-        <ul class="list-disc list-inside space-y-1 my-2 text-brand-text text-sm">
-          ${items.map((it) => `<li>${parseInline(it)}</li>`).join('')}
-        </ul>
-      `;
+    if (blockLines.every((l) => /^[-*]\s+/.test(l.trim()))) {
+      const items = blockLines.map((l) => `<li>${parseInline(l.trim().replace(/^[-*]\s+/, ''))}</li>`).join('');
+      return `<ul class="list-disc list-inside space-y-1 my-2 text-brand-text text-sm">${items}</ul>`;
     }
 
     // Ordered list
-    const isNumberedList = blockLines.every((l) => /^\d+\.\s+/.test(l.trim()));
-    if (isNumberedList) {
-      const items = blockLines.map((l) => l.trim().replace(/^\d+\.\s+/, ''));
-      return `
-        <ol class="list-decimal list-inside space-y-1 my-2 text-brand-text text-sm">
-          ${items.map((it) => `<li>${parseInline(it)}</li>`).join('')}
-        </ol>
-      `;
+    if (blockLines.every((l) => /^\d+\.\s+/.test(l.trim()))) {
+      const items = blockLines.map((l) => `<li>${parseInline(l.trim().replace(/^\d+\.\s+/, ''))}</li>`).join('');
+      return `<ol class="list-decimal list-inside space-y-1 my-2 text-brand-text text-sm">${items}</ol>`;
     }
 
     // Regular paragraph

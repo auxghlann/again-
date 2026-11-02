@@ -4,5 +4,6 @@
         "*.csv": "duckdb.dataFileViewer",
         "*.tsv": "duckdb.dataFileViewer",
         "*.xlsx": "duckdb.dataFileViewer"
-    }
+    },
+    "python.analysis.diagnosticsSource": "Pylance + Pyrefly"
 }

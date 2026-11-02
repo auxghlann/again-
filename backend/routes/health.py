@@ -23,7 +23,6 @@ def get_health() -> HealthResponse:
 
     # Check PostgreSQL sandbox runner connection
     pg_connected = check_postgres_connection()
-    postgres_status = "connected" if pg_connected else "disconnected"
 
     # Check Python sandbox runner capability
     python_status = "ready" if sys.executable else "unavailable"

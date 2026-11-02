@@ -13,11 +13,10 @@ from backend.db.queries.submissions import (
     list_submissions,
     record_submission,
 )
-from backend.schemas.plans import PlanProblemChecklistItem, StudyPlanDetailResponse
+from backend.schemas.plans import StudyPlanDetailResponse
 from backend.schemas.problems import (
     CodingProblemDetailResponse,
     SubmissionItem,
-    TestCaseItem,
 )
 
 router = APIRouter(tags=["problems"])
@@ -27,7 +26,7 @@ router = APIRouter(tags=["problems"])
 def get_plan_detail(
     plan_id: str,
     db: Session = Depends(get_db_session),
-) -> StudyPlanDetailResponse:
+) -> Any:
     """Returns study plan checklist with problem solved indicators."""
     plan = get_study_plan(db, plan_id)
     if not plan:
@@ -35,35 +34,14 @@ def get_plan_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Study plan '{plan_id}' not found.",
         )
-
-    problems = [
-        PlanProblemChecklistItem(
-            id=p["id"],
-            title=p["title"],
-            order_index=p.get("order_index", 0),
-            difficulty=p["difficulty"],
-            tags=p.get("tags", []),
-            language=p.get("language", plan["language"]),
-            solved=p.get("solved", False),
-        )
-        for p in plan.get("problems", [])
-    ]
-
-    return StudyPlanDetailResponse(
-        id=plan["id"],
-        title=plan["title"],
-        subtitle=plan["subtitle"],
-        language=plan["language"],
-        badge_text=plan["badge_text"],
-        problems=problems,
-    )
+    return plan
 
 
 @router.get("/problems/{problem_id}", response_model=CodingProblemDetailResponse)
 def get_problem_detail(
     problem_id: str,
     db: Session = Depends(get_db_session),
-) -> CodingProblemDetailResponse:
+) -> Any:
     """Returns full problem context, starter code, and test cases for workspace."""
     prob = get_coding_problem(db, problem_id)
     if not prob:
@@ -71,41 +49,16 @@ def get_problem_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Coding problem '{problem_id}' not found.",
         )
-
-    cases = [
-        TestCaseItem(
-            id=c.get("id"),
-            case_index=c["case_index"],
-            input=c["input"],
-            expected_output=c.get("expected_output"),
-        )
-        for c in prob.get("cases", [])
-    ]
-
-    return CodingProblemDetailResponse(
-        id=prob["id"],
-        plan_id=prob.get("plan_id"),
-        title=prob["title"],
-        order_index=prob.get("order_index", 0),
-        difficulty=prob["difficulty"],
-        tags=prob.get("tags", []),
-        language=prob["language"],
-        description_md=prob["description_md"],
-        starter_code=prob["starter_code"],
-        setup_sql=prob.get("setup_sql"),
-        canonical_solution=prob.get("canonical_solution"),
-        cases=cases,
-    )
+    return prob
 
 
 @router.get("/problems/{problem_id}/submissions", response_model=List[SubmissionItem])
 def get_problem_submissions(
     problem_id: str,
     db: Session = Depends(get_db_session),
-) -> List[SubmissionItem]:
+) -> Any:
     """Returns recent submission attempts for a coding problem."""
-    subs = list_submissions(db, problem_id)
-    return [SubmissionItem.model_validate(s) for s in subs]
+    return list_submissions(db, problem_id)
 
 
 @router.delete("/problems/{problem_id}/submissions")
@@ -174,4 +127,3 @@ def toggle_problem_solved(
         )
         db.commit()
         return {"status": "ok", "solved": True}
-

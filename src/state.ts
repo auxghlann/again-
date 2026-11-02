@@ -1,9 +1,6 @@
 import type {
-  CodingProblemDetailResponse,
   HealthResponse,
   PracticeTopicCard,
-  QuizDetailResponse,
-  StudyPlanDetailResponse,
   StudyPlanSummary,
 } from './types';
 
@@ -18,9 +15,6 @@ export interface AppState {
   healthData: HealthResponse | null;
   practiceTopics: PracticeTopicCard[];
   studyPlans: StudyPlanSummary[];
-  activeQuiz: QuizDetailResponse | null;
-  activePlan: StudyPlanDetailResponse | null;
-  activeProblem: CodingProblemDetailResponse | null;
 }
 
 const THEME_STORAGE_KEY = 'again_theme';
@@ -54,9 +48,6 @@ const state: AppState = {
   healthData: null,
   practiceTopics: [],
   studyPlans: [],
-  activeQuiz: null,
-  activePlan: null,
-  activeProblem: null,
 };
 
 // Initial DOM theme attribute synchronization
@@ -71,10 +62,9 @@ export function getState(): AppState {
 
 export function setState(partial: Partial<AppState>): void {
   let changed = false;
-  const stateRecord = state as unknown as Record<string, unknown>;
-  for (const [key, value] of Object.entries(partial)) {
-    if (stateRecord[key] !== value) {
-      stateRecord[key] = value;
+  for (const [k, v] of Object.entries(partial) as [keyof AppState, AppState[keyof AppState]][]) {
+    if (state[k] !== v) {
+      (state as Record<keyof AppState, AppState[keyof AppState]>)[k] = v;
       changed = true;
     }
   }
@@ -135,23 +125,21 @@ const VALID_PLAN_FILTERS: PlanFilter[] = ['all', 'unsolved', 'solved', 'easy', '
 const VALID_PLAN_SORTS: PlanSort[] = ['default', 'difficulty-asc', 'difficulty-desc', 'title-asc', 'title-desc', 'status'];
 
 export function getPlanFilter(planId: string): PlanFilter {
-  const val = localStorage.getItem(`${PLAN_FILTER_KEY_PREFIX}${planId}`) || localStorage.getItem('again_plan_filter');
+  const val = localStorage.getItem(`${PLAN_FILTER_KEY_PREFIX}${planId}`);
   return val && VALID_PLAN_FILTERS.includes(val as PlanFilter) ? (val as PlanFilter) : 'all';
 }
 
 export function setPlanFilter(planId: string, filter: PlanFilter): void {
   localStorage.setItem(`${PLAN_FILTER_KEY_PREFIX}${planId}`, filter);
-  localStorage.setItem('again_plan_filter', filter);
 }
 
 export function getPlanSort(planId: string): PlanSort {
-  const val = localStorage.getItem(`${PLAN_SORT_KEY_PREFIX}${planId}`) || localStorage.getItem('again_plan_sort');
+  const val = localStorage.getItem(`${PLAN_SORT_KEY_PREFIX}${planId}`);
   return val && VALID_PLAN_SORTS.includes(val as PlanSort) ? (val as PlanSort) : 'default';
 }
 
 export function setPlanSort(planId: string, sort: PlanSort): void {
   localStorage.setItem(`${PLAN_SORT_KEY_PREFIX}${planId}`, sort);
-  localStorage.setItem('again_plan_sort', sort);
 }
 
 export function getCodeCatalogFilter(): { language: string; search: string } {

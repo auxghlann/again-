@@ -80,8 +80,10 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
       const idx = parseInt(k, 10);
       if (!isNaN(idx) && questions[idx]) {
         const q = questions[idx];
-        const isCorrect = checkCorrectness(q, String(v));
-        localAnswers[idx] = { value: String(v), correct: isCorrect };
+        const rawVal = typeof v === 'object' && v !== null && 'value' in v ? v.value : v;
+        const answerStr = String(rawVal);
+        const isCorrect = checkCorrectness(q, answerStr);
+        localAnswers[idx] = { value: answerStr, correct: isCorrect };
       }
     }
   }
@@ -253,7 +255,7 @@ export async function renderQuizView(container: HTMLElement, topicId: string): P
           <span class="shrink-0 mt-0.5 ${saved.correct ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}">${icon(saved.correct ? 'check' : 'left', 14)}</span>
           <div>
             <b class="block font-bold mb-0.5 ${saved.correct ? 'text-emerald-900 dark:text-emerald-200' : 'text-rose-900 dark:text-rose-200'}">${saved.correct ? 'Correct.' : 'Not quite.'}</b>
-            ${escapeHtml(q.explain || q.explanation || '')}
+            ${escapeHtml(q.explain || '')}
           </div>
         </div>
       `

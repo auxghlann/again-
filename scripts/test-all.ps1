@@ -3,8 +3,7 @@
 
 param (
     [switch]$SkipE2E,
-    [switch]$SkipBackend,
-    [switch]$VerboseOutput
+    [switch]$SkipBackend
 )
 
 $ErrorActionPreference = "Stop"
