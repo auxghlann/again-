@@ -5,7 +5,7 @@
 
 import { escapeHtml, icon } from '../../components/icons';
 import { formatAsciiTable, formatTestCaseData } from '../../utils/tableFormatter';
-import type { TestCaseItem } from '../../types';
+import type { SqlCellValue, SqlRow, TableData, TestCaseItem, TestCaseSqlInput, TestCaseSqlOutput } from '../../types';
 
 export type ConsoleTabType = 'testcase' | 'result';
 
@@ -80,14 +80,11 @@ export function renderTestCaseBox(
   }
   if (casesList[activeCaseIdx]) {
     const tc = casesList[activeCaseIdx];
-    const tcInp = tc.inputData !== undefined ? tc.inputData : tc.input;
-    const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
-
     return `
       <label class="text-[10px] font-bold tracking-wider text-brand-muted uppercase">INPUT</label>
-      ${formatTestCaseData(tcInp)}
+      ${formatTestCaseData(tc.input)}
       <label class="text-[10px] font-bold tracking-wider text-brand-muted uppercase mt-2">EXPECTED OUTPUT</label>
-      ${formatTestCaseData(tcOut)}
+      ${formatTestCaseData(tc.expected_output)}
     `;
   }
   return `<span class="text-xs text-brand-muted">No test cases available.</span>`;
@@ -159,26 +156,34 @@ export function renderTestResultOutput(
 }
 
 export function buildSqlConsoleTables(
-  res: { columns?: string[]; rows?: unknown[]; expected_rows?: Record<string, unknown>[] },
+  res: { columns?: string[]; rows?: (SqlRow | SqlCellValue[])[]; expected_rows?: SqlRow[] },
   tc?: TestCaseItem
 ): { inputTable: string; outputTable: string; expectedTable: string } {
   let inputTable = '';
   if (tc) {
-    const tcInp = tc.inputData !== undefined ? tc.inputData : tc.input;
+    const tcInp = tc.input;
     if (tcInp && typeof tcInp === 'object') {
-      const inpObj = tcInp as Record<string, unknown>;
+      const inpObj = tcInp as TestCaseSqlInput;
       if (inpObj.tables && typeof inpObj.tables === 'object' && !Array.isArray(inpObj.tables)) {
         const tableParts: string[] = [];
-        for (const [tName, tData] of Object.entries(inpObj.tables as Record<string, { columns: string[]; rows: (Record<string, unknown> | unknown[])[] }>)) {
+        for (const [tName, tData] of Object.entries(inpObj.tables as Record<string, TableData>)) {
           if (tData && Array.isArray(tData.columns)) {
             tableParts.push(`Table: ${tName}\n` + formatAsciiTable(tData.columns, tData.rows || []));
           }
         }
-        inputTable = tableParts.join('\n\n');
+        if (tableParts.length > 0) {
+          inputTable = tableParts.join('\n\n');
+        } else if (Array.isArray(inpObj.columns)) {
+          const tName = typeof inpObj.table_name === 'string' ? `Table: ${inpObj.table_name}\n` : '';
+          const rowsList = inpObj.rows || [];
+          inputTable = tName + formatAsciiTable(inpObj.columns, rowsList);
+        } else {
+          inputTable = JSON.stringify(tcInp, null, 2);
+        }
       } else if (Array.isArray(inpObj.columns)) {
         const tName = typeof inpObj.table_name === 'string' ? `Table: ${inpObj.table_name}\n` : '';
-        const rowsList = (inpObj.rows as (Record<string, unknown> | unknown[])[]) || [];
-        inputTable = tName + formatAsciiTable(inpObj.columns as string[], rowsList);
+        const rowsList = inpObj.rows || [];
+        inputTable = tName + formatAsciiTable(inpObj.columns, rowsList);
       } else {
         inputTable = JSON.stringify(tcInp, null, 2);
       }
@@ -187,7 +192,7 @@ export function buildSqlConsoleTables(
     }
   }
 
-  const userRows = (res.rows || []) as (Record<string, unknown> | unknown[])[];
+  const userRows = res.rows || [];
   const outputTable = res.columns && res.columns.length > 0 ? formatAsciiTable(res.columns, userRows) : '(No rows returned)';
 
   let expectedTable = '';
@@ -195,8 +200,8 @@ export function buildSqlConsoleTables(
     const expCols = Object.keys(res.expected_rows[0]);
     expectedTable = formatAsciiTable(expCols, res.expected_rows);
   } else if (tc) {
-    const tcOut = tc.expectedOutput !== undefined ? tc.expectedOutput : tc.expected_output;
-    const tcObj = tcOut as { columns?: string[]; rows?: Record<string, unknown>[] } | null;
+    const tcOut = tc.expected_output;
+    const tcObj = tcOut as TestCaseSqlOutput | null;
     if (tcObj && typeof tcObj === 'object' && Array.isArray(tcObj.columns)) {
       expectedTable = formatAsciiTable(tcObj.columns, tcObj.rows || []);
     } else if (typeof tcOut === 'string') {
@@ -208,4 +213,3 @@ export function buildSqlConsoleTables(
 
   return { inputTable, outputTable, expectedTable };
 }
-

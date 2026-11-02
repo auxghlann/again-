@@ -18,9 +18,12 @@ import { navigate } from '../router';
 import { setState } from '../state';
 import type {
   CodingProblemDetailResponse,
+  PythonRunResponse,
+  SqlRunResponse,
   SubmissionItem,
   TestCaseItem,
 } from '../types';
+import { renderMarkdown } from '../utils/markdown';
 
 import { getStoredSplitPercentages, setupBentoResizers } from './workbench/workbenchResizer';
 import {
@@ -38,8 +41,28 @@ import {
   renderTestResultOutput,
   type ConsoleTabType,
 } from './workbench/workbenchConsole';
-import { renderProblemDescription } from './workbench/workbenchDescription';
 import { renderWorkbenchLayout } from './workbench/workbenchLayout';
+
+function renderProblemDescription(problem: CodingProblemDetailResponse | null): string {
+  const descMarkdown = problem?.description_md || '';
+  const diffBadgeColor =
+    problem?.difficulty === 'Easy'
+      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+      : problem?.difficulty === 'Medium'
+      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400';
+
+  return `
+    <div class="tags flex items-center gap-2 mb-3">
+      <span class="tg lang text-xs font-semibold px-2.5 py-0.5 rounded bg-brand-surface2 border border-brand-line text-brand-text">${escapeHtml(problem?.language || '')}</span>
+      <span class="tg text-xs font-semibold px-2.5 py-0.5 rounded ${diffBadgeColor}">${escapeHtml(problem?.difficulty || '')}</span>
+    </div>
+    <h2 class="text-xl font-bold tracking-tight text-brand-text mb-4">${escapeHtml(problem?.title || '')}</h2>
+    <div class="text-sm leading-relaxed space-y-2">
+      ${renderMarkdown(descMarkdown)}
+    </div>
+  `;
+}
 
 export async function renderProblemView(container: HTMLElement, problemId: string): Promise<void> {
   container.innerHTML = renderShell(
@@ -85,7 +108,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   const langLabel = isSql ? 'PostgreSQL' : 'Python 3';
 
   // Navigation back breadcrumb
-  const planId = problem.planId || problem.plan_id;
+  const planId = problem.plan_id;
   const backHref = planId ? `#/plans/${encodeURIComponent(planId)}` : '#/code';
   const backLabel = planId ? 'Study Plan' : 'Code Library';
 
@@ -99,23 +122,15 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   let customInputActive = false;
   let customInputValue = '';
 
-  const casesList: TestCaseItem[] = problem.testCases || problem.cases || [];
+  const casesList: TestCaseItem[] = problem.cases || [];
   const testResults: (boolean | null)[] = casesList.map(() => null);
 
   // Stored split layout percentages
   const { splitX, splitY } = getStoredSplitPercentages();
 
   const localCodeKey = `again_code_${problem.id}`;
-  const starter = problem.starterCode || problem.starter_code || '-- Write your PostgreSQL query statement below\n';
+  const starter = problem.starter_code || '-- Write your PostgreSQL query statement below\n';
   let userCode = localStorage.getItem(localCodeKey) || starter;
-  if (userCode.includes('-- Write your SQL query below\nSELECT')) {
-    userCode = starter;
-    try {
-      localStorage.setItem(localCodeKey, starter);
-    } catch {
-      // ignore
-    }
-  }
 
   function renderLeftTabBody(): string {
     if (currentLeftTab === 'desc') {
@@ -401,11 +416,11 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
 
     try {
       if (isSql) {
-        const res = await runSql({ problemId, userQuery: userCode, is_submission: isSubmission });
-        handleSqlResult(res, isSubmission);
+        const res = await runSql({ problem_id: problemId, user_sql: userCode, is_submission: isSubmission });
+        handleExecutionResult(res, isSubmission);
       } else {
-        const res = await runPython({ problemId, code: userCode, is_submission: isSubmission });
-        handlePythonResult(res, isSubmission);
+        const res = await runPython({ problem_id: problemId, user_code: userCode, is_submission: isSubmission });
+        handleExecutionResult(res, isSubmission);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Execution failed';
@@ -416,7 +431,7 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       if (isSubmission) {
         selectedSubmission = {
           id: `err_${Date.now()}`,
-          problemId,
+          problem_id: problemId,
           language: isSql ? 'PostgreSQL' : 'Python 3',
           status: 'Runtime Error',
           runtime_ms: 0,
@@ -436,8 +451,8 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     }
   }
 
-  function handlePythonResult(
-    res: { passed: boolean; status: string; passedCount?: number; passed_count?: number; totalCount?: number; total_count?: number; output: string; durationMs?: number; duration_ms?: number; runtime_ms?: number; error?: string | null },
+  function handleExecutionResult(
+    res: SqlRunResponse | PythonRunResponse,
     isSubmission: boolean
   ): void {
     const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
@@ -450,16 +465,14 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
       testResults[i] = res.passed;
     }
 
-    const ms = res.durationMs ?? res.duration_ms ?? res.runtime_ms ?? 0;
-    const total = res.totalCount ?? res.total_count ?? 3;
-    const passedCount = res.passedCount ?? res.passed_count ?? 0;
+    const ms = res.runtime_ms ?? 0;
     const isAccepted = res.passed && res.status === 'Accepted';
 
     if (isSubmission) {
       selectedSubmission = {
         id: `sub_${Date.now()}`,
-        problemId,
-        language: 'Python 3',
+        problem_id: problemId,
+        language: isSql ? 'PostgreSQL' : 'Python 3',
         status: res.status,
         runtime_ms: ms,
         submitted_code: userCode,
@@ -471,9 +484,9 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
 
       if (isAccepted) {
         setState({ studyPlans: [] });
-        showToast('Accepted. All test cases passed.');
+        showToast(isSql ? 'Accepted. Query matches canonical solution.' : 'Accepted. All test cases passed.');
       } else {
-        showToast('Wrong answer. Check submission details.');
+        showToast(isSql && res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match expected dataset.' : 'Execution failed.');
       }
 
       getProblemSubmissions(problemId)
@@ -485,7 +498,11 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     }
 
     if (isAccepted) {
-      runPython({ problemId, code: userCode, is_submission: true }).catch(() => {});
+      if (isSql) {
+        runSql({ problem_id: problemId, user_sql: userCode, is_submission: true }).catch(() => {});
+      } else {
+        runPython({ problem_id: problemId, user_code: userCode, is_submission: true }).catch(() => {});
+      }
       setState({ studyPlans: [] });
     }
 
@@ -494,102 +511,37 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     consoleStatusClass = isAccepted ? 'text-emerald-500 font-semibold' : 'text-rose-500 font-semibold';
     updateConsoleHeader();
 
-    const errDetail = res.error ? `\n\nError: ${escapeHtml(res.error)}` : '';
-    lastConsoleOutputHtml = `
-      <div class="flex flex-col gap-3 font-mono text-xs">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-sm ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(res.status)}</span>
-          <span class="text-xs text-brand-muted">Runtime: ${ms} ms (${passedCount}/${total} test cases passed)</span>
+    if (isSql) {
+      const sqlRes = res as SqlRunResponse;
+      const tc = casesList[activeCaseIdx];
+      const { inputTable, outputTable, expectedTable } = buildSqlConsoleTables(sqlRes, tc);
+
+      lastConsoleOutputHtml = renderTestResultOutput(
+        res.status,
+        ms,
+        isAccepted,
+        inputTable,
+        outputTable,
+        expectedTable,
+        sqlRes.diff || undefined,
+        sqlRes.error || undefined
+      );
+    } else {
+      const pyRes = res as PythonRunResponse;
+      const errDetail = pyRes.error ? `\n\nError: ${escapeHtml(pyRes.error)}` : '';
+      lastConsoleOutputHtml = `
+        <div class="flex flex-col gap-3 font-mono text-xs">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm ${isAccepted ? 'text-emerald-500' : 'text-rose-500'}">${escapeHtml(pyRes.status)}</span>
+            <span class="text-xs text-brand-muted">Runtime: ${ms} ms (${pyRes.passed_count}/${pyRes.total_count} test cases passed)</span>
+          </div>
+          <div>
+            <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Output</div>
+            <pre class="p-3 rounded-xl bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-relaxed whitespace-pre">${escapeHtml(pyRes.output || '(No stdout)')}${errDetail}</pre>
+          </div>
         </div>
-        <div>
-          <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-1 font-sans">Output</div>
-          <pre class="p-3 rounded-xl bg-brand-surface2 border border-brand-line overflow-x-auto text-brand-text leading-relaxed whitespace-pre">${escapeHtml(res.output || '(No stdout)')}${errDetail}</pre>
-        </div>
-      </div>
-    `;
-    renderConsoleBody();
-  }
-
-  function handleSqlResult(
-    res: {
-      passed: boolean;
-      status: string;
-      columns?: string[];
-      rows?: unknown[];
-      expected_rows?: Record<string, unknown>[];
-      durationMs?: number;
-      duration_ms?: number;
-      runtime_ms?: number;
-      diff?: string | null;
-      error?: string | null;
-    },
-    isSubmission: boolean
-  ): void {
-    const statusPill = container.querySelector('#execution-status-pill') as HTMLElement | null;
-    if (statusPill) {
-      statusPill.textContent = 'READY';
-      statusPill.className = 'ready ml-2 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+      `;
     }
-
-    for (let i = 0; i < testResults.length; i++) {
-      testResults[i] = res.passed;
-    }
-
-    const ms = res.durationMs ?? res.duration_ms ?? res.runtime_ms ?? 0;
-    const isAccepted = res.passed && res.status === 'Accepted';
-
-    if (isSubmission) {
-      selectedSubmission = {
-        id: `sub_${Date.now()}`,
-        problemId,
-        language: 'PostgreSQL',
-        status: res.status,
-        runtime_ms: ms,
-        submitted_code: userCode,
-        created_at: new Date().toLocaleTimeString(),
-      };
-      submissions = [selectedSubmission, ...submissions];
-      currentLeftTab = 'detail';
-      updateLeftPanel();
-
-      if (isAccepted) {
-        setState({ studyPlans: [] });
-        showToast('Accepted. Query matches canonical solution.');
-      } else {
-        showToast(res.status === 'Wrong Answer' ? 'Wrong answer. Query did not match expected dataset.' : 'Execution failed.');
-      }
-
-      getProblemSubmissions(problemId)
-        .then((updated) => {
-          submissions = updated;
-        })
-        .catch(() => {});
-      return;
-    }
-
-    if (isAccepted) {
-      runSql({ problemId, userQuery: userCode, is_submission: true }).catch(() => {});
-      setState({ studyPlans: [] });
-    }
-
-    // Run action -> formatted ASCII tables in console
-    consoleStatusText = `${res.status} (${ms}ms)`;
-    consoleStatusClass = isAccepted ? 'text-emerald-500 font-semibold' : 'text-rose-500 font-semibold';
-    updateConsoleHeader();
-
-    const tc = casesList[activeCaseIdx];
-    const { inputTable, outputTable, expectedTable } = buildSqlConsoleTables(res, tc);
-
-    lastConsoleOutputHtml = renderTestResultOutput(
-      res.status,
-      ms,
-      isAccepted,
-      inputTable,
-      outputTable,
-      expectedTable,
-      res.diff || undefined,
-      res.error || undefined
-    );
 
     renderConsoleBody();
   }

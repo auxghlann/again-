@@ -182,13 +182,15 @@ class Solution:
 
 
 def test_all_study_plan_coding_problems_canonical_solutions_pass():
-    """Verifies all 70 SQL coding problems across all 5 study plans execute cleanly and pass expected outputs."""
+    """Verifies all 106 SQL coding problems across 8 study plans execute cleanly and pass expected outputs."""
     from backend.populate_catalog.sql_advance import PROBLEMS as ADV_PROBLEMS
     from backend.populate_catalog.sql_beginner import PROBLEMS as BEG_PROBLEMS
     from backend.populate_catalog.sql_data_manipulation import PROBLEMS as MANIP_PROBLEMS
+    from backend.populate_catalog.sql_database_architecture import PROBLEMS as ARCH_PROBLEMS
     from backend.populate_catalog.sql_dates import PROBLEMS as DATES_PROBLEMS
     from backend.populate_catalog.sql_intermediate import PROBLEMS as INT_PROBLEMS
-
+    from backend.populate_catalog.sql_window_functions import PROBLEMS as WF_PROBLEMS
+    from backend.populate_catalog.sql_statistics import PROBLEMS as STATS_PROBLEMS
 
     all_problems = (
         BEG_PROBLEMS
@@ -196,8 +198,11 @@ def test_all_study_plan_coding_problems_canonical_solutions_pass():
         + ADV_PROBLEMS
         + DATES_PROBLEMS
         + MANIP_PROBLEMS
+        + ARCH_PROBLEMS
+        + WF_PROBLEMS
+        + STATS_PROBLEMS
     )
-    assert len(all_problems) == 70
+    assert len(all_problems) == 106
 
     for p in all_problems:
         tc = p["test_cases"][0]

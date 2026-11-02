@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Dict, List, Optional, Union
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class PracticeTopicCard(BaseModel):
@@ -38,7 +38,7 @@ class QuizProgressState(BaseModel):
     card_id: Optional[str] = None
     current_index: int = 0
     done: bool = False
-    answers: Dict[str, Any] = Field(default_factory=dict)
+    answers: Dict[str, JsonValue] = Field(default_factory=dict)
     updated_at: Optional[str] = None
 
 
@@ -65,7 +65,7 @@ class QuizDetailResponse(BaseModel):
 class QuizProgressUpsertRequest(BaseModel):
     """Request payload to persist user answers and active question index."""
     current_index: int = Field(ge=0)
-    answers: Dict[str, Any] = Field(default_factory=dict)
+    answers: Dict[str, JsonValue] = Field(default_factory=dict)
     done: bool = False
 
 

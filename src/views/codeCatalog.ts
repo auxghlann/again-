@@ -3,17 +3,7 @@ import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
 import { getCodeCatalogFilter, getState, setCodeCatalogFilter, setState } from '../state';
 import type { StudyPlanSummary } from '../types';
-
-function getAvailableLanguages(planList: StudyPlanSummary[]): string[] {
-  const langs = new Set<string>();
-  for (const p of planList) {
-    const lang = (p.language || p.category || '').trim();
-    if (lang) {
-      langs.add(lang);
-    }
-  }
-  return ['All', ...Array.from(langs).sort()];
-}
+import { getAvailableCategories, renderCatalogSkeleton } from './catalogShared';
 
 const initialCodeFilter = getCodeCatalogFilter();
 let activeLangChip = initialCodeFilter.language;
@@ -26,38 +16,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
   if (!plans.length) {
     container.innerHTML = renderShell(
       'code',
-      `
-        <div class="page p-6 w-full animate-pulse">
-          <div class="flex items-center gap-2 mb-5">
-            <div class="h-6 w-16 bg-brand-line/60 rounded-full"></div>
-            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
-            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
-          </div>
-          <div class="flex items-center justify-between mb-5">
-            <div class="h-4 w-32 bg-brand-line/60 rounded"></div>
-            <div class="h-8 w-44 bg-brand-line/40 rounded-lg"></div>
-          </div>
-          <div class="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
-            ${Array.from({ length: 6 })
-              .map(
-                () => `
-              <div class="bg-brand-surface border border-brand-line rounded-xl p-5 min-h-[140px] flex flex-col justify-between">
-                <div>
-                  <div class="h-3 w-20 bg-brand-line/60 rounded mb-3"></div>
-                  <div class="h-5 w-3/4 bg-brand-line rounded mb-3"></div>
-                  <div class="h-1.5 w-full bg-brand-line/40 rounded-full"></div>
-                </div>
-                <div class="flex items-center justify-between pt-4 mt-auto">
-                  <div class="h-3 w-24 bg-brand-line/50 rounded"></div>
-                  <div class="h-6 w-16 bg-brand-line/60 rounded-md"></div>
-                </div>
-              </div>
-            `
-              )
-              .join('')}
-          </div>
-        </div>
-      `,
+      renderCatalogSkeleton(true),
       ['Code Library', 'All Study Plans']
     );
     attachShellEvents(container);
@@ -95,7 +54,7 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
   }
 
   function renderView(): void {
-    const availableLanguages = getAvailableLanguages(plans);
+    const availableLanguages = getAvailableCategories(plans, (p) => p.category || p.language || '');
     if (!availableLanguages.includes(activeLangChip)) {
       activeLangChip = 'All';
       setCodeCatalogFilter(activeLangChip, codeSearchQuery);
@@ -121,8 +80,8 @@ export async function renderCodeCatalog(container: HTMLElement): Promise<void> {
     const cardsHtml = filtered.length
       ? filtered
           .map((plan) => {
-            const totalCount = plan.problemCount ?? plan.total_problems ?? 0;
-            const solvedCount = plan.completedCount ?? plan.solved_count ?? 0;
+            const totalCount = plan.total_problems ?? 0;
+            const solvedCount = plan.solved_count ?? 0;
             const category = plan.category || plan.language || 'SQL';
             const isCompleted = totalCount > 0 && solvedCount >= totalCount;
             const isInProgress = !isCompleted && solvedCount > 0;

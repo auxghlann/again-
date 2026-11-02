@@ -44,6 +44,9 @@ data/*.db-shm
 node_modules/
 dist/
 .vite/
+.npmrc
+pnpm-lock.yaml
+pnpm-workspace.yaml
 
 # Environment files
 .env
@@ -65,3 +68,6 @@ backend/seed/
 
 # Local catalog population modules
 backend/populate_catalog/
+
+# Local recall quizzes and documentation
+.docs/

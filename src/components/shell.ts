@@ -106,29 +106,22 @@ export function renderSidebar(activeNav: string): string {
       </nav>
 
       <div class="me mt-auto flex flex-col gap-2 pt-3 pb-0.5 border-t border-[#1b2740]/60">
-        ${
-          isCollapsed
-            ? `
-          <div class="flex flex-col items-center gap-2">
-            <div class="av w-8 h-8 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0" title="Khester">KM</div>
-            <button type="button" class="gear-btn p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer" id="gear-btn" title="Settings" aria-label="Settings">
-              ${icon('gear', 16)}
-            </button>
-          </div>
-        `
-            : `
-          <div class="flex items-center gap-2.5 px-1">
-            <div class="av w-8 h-8 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0">KM</div>
+        <div class="flex items-center ${isCollapsed ? 'flex-col gap-2' : 'gap-2.5 px-1'}">
+          <div class="av w-8 h-8 rounded-full bg-[#1b2a45] text-white font-semibold text-xs flex items-center justify-center shrink-0" title="Khester">KM</div>
+          ${
+            isCollapsed
+              ? ''
+              : `
             <div class="max-[900px]:hidden min-w-0">
               <b class="block text-xs text-white leading-tight truncate">Khester</b>
               <small class="text-[11px] text-[#6c7b95] block truncate">Localhost Mode</small>
             </div>
-            <button type="button" class="gear-btn ml-auto p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer" id="gear-btn" title="Settings" aria-label="Settings">
-              ${icon('gear', 16)}
-            </button>
-          </div>
-        `
-        }
+          `
+          }
+          <button type="button" class="gear-btn ${isCollapsed ? '' : 'ml-auto'} p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[#7e8ca6] hover:text-white hover:bg-white/10 transition-colors cursor-pointer" id="gear-btn" title="Settings" aria-label="Settings">
+            ${icon('gear', 16)}
+          </button>
+        </div>
       </div>
     </aside>
   `;
@@ -203,19 +196,8 @@ export function attachShellEvents(container: HTMLElement): void {
     };
   }
 
-  const navLinks = container.querySelectorAll<HTMLAnchorElement>('.nav a');
+  const navLinks = container.querySelectorAll<HTMLAnchorElement>('.nav a, .topbar a.crumb-link');
   navLinks.forEach((link) => {
-    link.onclick = (e) => {
-      e.preventDefault();
-      const href = link.getAttribute('href');
-      if (href) {
-        navigate(href);
-      }
-    };
-  });
-
-  const crumbLinks = container.querySelectorAll<HTMLAnchorElement>('.topbar a.crumb-link');
-  crumbLinks.forEach((link) => {
     link.onclick = (e) => {
       e.preventDefault();
       const href = link.getAttribute('href');

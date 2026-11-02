@@ -3,17 +3,7 @@ import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml, icon } from '../components/icons';
 import { getPracticeCatalogFilter, getState, setPracticeCatalogFilter, setState } from '../state';
 import type { PracticeTopicCard } from '../types';
-
-function getAvailableTopics(topicList: PracticeTopicCard[]): string[] {
-  const categories = new Set<string>();
-  for (const t of topicList) {
-    const cat = (t.topic || t.tool || '').trim();
-    if (cat) {
-      categories.add(cat);
-    }
-  }
-  return ['All', ...Array.from(categories).sort()];
-}
+import { getAvailableCategories, renderCatalogSkeleton } from './catalogShared';
 
 const initialPracticeFilter = getPracticeCatalogFilter();
 let activeFilterChip = initialPracticeFilter.topic;
@@ -26,37 +16,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
   if (!topics.length) {
     container.innerHTML = renderShell(
       'practice',
-      `
-        <div class="page p-6 w-full animate-pulse">
-          <div class="flex items-center gap-2 mb-5">
-            <div class="h-6 w-16 bg-brand-line/60 rounded-full"></div>
-            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
-            <div class="h-6 w-16 bg-brand-line/40 rounded-full"></div>
-          </div>
-          <div class="flex items-center justify-between mb-5">
-            <div class="h-4 w-32 bg-brand-line/60 rounded"></div>
-            <div class="h-8 w-44 bg-brand-line/40 rounded-lg"></div>
-          </div>
-          <div class="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
-            ${Array.from({ length: 6 })
-              .map(
-                () => `
-              <div class="bg-brand-surface border border-brand-line rounded-xl p-5 min-h-[140px] flex flex-col justify-between">
-                <div>
-                  <div class="h-3 w-20 bg-brand-line/60 rounded mb-3"></div>
-                  <div class="h-5 w-3/4 bg-brand-line rounded mb-3"></div>
-                </div>
-                <div class="flex items-center justify-between pt-4 mt-auto">
-                  <div class="h-3 w-24 bg-brand-line/50 rounded"></div>
-                  <div class="h-6 w-16 bg-brand-line/60 rounded-md"></div>
-                </div>
-              </div>
-            `
-              )
-              .join('')}
-          </div>
-        </div>
-      `,
+      renderCatalogSkeleton(false),
       ['Practice Library', 'All Topics']
     );
     attachShellEvents(container);
@@ -85,7 +45,7 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
   }
 
   function renderView(): void {
-    const availableTopics = getAvailableTopics(topics);
+    const availableTopics = getAvailableCategories(topics, (t) => t.topic || t.tool || '');
     if (!availableTopics.includes(activeFilterChip)) {
       activeFilterChip = 'All';
       setPracticeCatalogFilter(activeFilterChip, searchQuery);
@@ -111,8 +71,8 @@ export async function renderPracticeCatalog(container: HTMLElement): Promise<voi
     const cardsHtml = filtered.length
       ? filtered
           .map((card) => {
-            const totalQ = card.total_questions ?? card.totalQuestions ?? 4;
-            const answeredQ = card.answered_count ?? card.completedCount ?? 0;
+            const totalQ = card.total_questions ?? 4;
+            const answeredQ = card.answered_count ?? 0;
             const isCompleted = card.done || card.status === 'completed' || (totalQ > 0 && answeredQ >= totalQ);
             const isInProgress = !isCompleted && answeredQ > 0;
             const stateLabel = isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : 'PRACTICE';

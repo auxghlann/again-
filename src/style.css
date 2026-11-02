@@ -20,15 +20,6 @@
   --line: #e2e6ee;
   --text: #0e1a2c;
   --muted: #68758a;
-  --btn: #0e1a2c;
-  --btn-text: #ffffff;
-  --chip: #eaf0f8;
-  --green: #1fa463;
-  --nav: #081120;
-  --nav-hi: #12213b;
-  --easy: #2cbb5d;
-  --med: #ffb800;
-  --hard: #ef4743;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -42,9 +33,6 @@
     --line: #25314a;
     --text: #e6ecf5;
     --muted: #8d9bb3;
-    --btn: #e6ecf5;
-    --btn-text: #0c121d;
-    --chip: #1b2740;
   }
 }
 
@@ -55,9 +43,6 @@
   --line: #25314a;
   --text: #e6ecf5;
   --muted: #8d9bb3;
-  --btn: #e6ecf5;
-  --btn-text: #0c121d;
-  --chip: #1b2740;
 }
 
 *, *::before, *::after {
@@ -115,11 +100,6 @@ body {
 .code .f { color: #82aaff; }
 .code .b { color: #7fdbca; }
 
-/* ---------- Console Output Highlight Classes ---------- */
-.cons .g { color: #4ade80; }
-.cons .r { color: #f87171; }
-.cons .m { color: #6f7f9c; }
-
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
@@ -149,4 +129,3 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted);
 }
-

@@ -15,11 +15,13 @@ export function renderLeftPanelTabs(
   const isLTab = (tab: LeftTabType) => currentLeftTab === tab;
 
   let tabsHtml = `
-    <button type="button" id="tab-btn-desc" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('desc') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+    <button type="button" id="tab-btn-desc" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+      isLTab('desc') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
     }" data-ltab="desc">
       ${icon('doc', 13)} Description
     </button>
-    <button type="button" id="tab-btn-subs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${isLTab('subs') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
+    <button type="button" id="tab-btn-subs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+      isLTab('subs') ? 'active bg-brand-surface text-brand-text shadow-xs font-semibold' : 'text-brand-muted hover:text-brand-text'
     }" data-ltab="subs">
       ${icon('activity', 13)} Submissions
     </button>
@@ -77,9 +79,9 @@ export function renderSubmissionDetailView(
   fallbackCode: string
 ): string {
   const isAccepted = selectedSubmission?.status === 'Accepted';
-  const runtimeVal = selectedSubmission?.runtime_ms ?? selectedSubmission?.runtimeMs ?? selectedSubmission?.executionTimeMs ?? 0;
-  const codeVal = selectedSubmission?.submitted_code ?? selectedSubmission?.submittedCode ?? selectedSubmission?.code ?? fallbackCode;
-  const dateVal = selectedSubmission?.created_at ?? selectedSubmission?.createdAt ?? 'Just now';
+  const runtimeVal = selectedSubmission?.runtime_ms ?? 0;
+  const codeVal = selectedSubmission?.submitted_code ?? fallbackCode;
+  const dateVal = selectedSubmission?.created_at ?? 'Just now';
   const langVal = selectedSubmission?.language ?? problemLang ?? 'SQL';
 
   return `
@@ -157,8 +159,8 @@ export function renderSubmissionsList(submissions: SubmissionItem[]): string {
           ${submissions
       .map((s, idx) => {
         const isAccepted = s.status === 'Accepted';
-        const runMs = s.runtime_ms ?? s.runtimeMs ?? s.executionTimeMs ?? 0;
-        const dateStr = s.created_at ?? s.createdAt ?? 'Recent';
+        const runMs = s.runtime_ms ?? 0;
+        const dateStr = s.created_at ?? 'Recent';
         return `
                 <tr class="sub-row hover:bg-brand-surface2/50 transition-colors cursor-pointer group" data-sub-idx="${idx}" title="Click to view submission details">
                   <td class="p-3 font-semibold ${isAccepted ? 'text-emerald-500' : 'text-rose-500'} group-hover:underline">${escapeHtml(s.status)}</td>

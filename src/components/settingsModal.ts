@@ -8,8 +8,6 @@ let keydownListener: ((e: KeyboardEvent) => void) | null = null;
 export function openSettingsModal(): void {
   closeSettingsModal();
 
-  const currentTheme = getState().theme;
-
   modalContainer = document.createElement('div');
   modalContainer.id = 'settings-modal-backdrop';
   modalContainer.className =
@@ -159,6 +157,29 @@ export function openSettingsModal(): void {
     `;
   }
 
+  function updateModal(): void {
+    if (modalContainer) {
+      modalContainer.innerHTML = renderModalContent(getState().theme);
+      attachModalEvents();
+    }
+  }
+
+  async function refreshHealthDiagnostics(refreshBtn?: HTMLButtonElement | null): Promise<void> {
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add('opacity-50', 'pointer-events-none');
+    }
+    try {
+      const res = await getHealth();
+      const isHealthy = res.status === 'healthy' || res.status === 'ok';
+      setState({ backendConnected: isHealthy, healthData: res });
+    } catch {
+      setState({ backendConnected: false, healthData: null });
+    } finally {
+      updateModal();
+    }
+  }
+
   function attachModalEvents(): void {
     if (!modalContainer) return;
 
@@ -175,53 +196,25 @@ export function openSettingsModal(): void {
     const doneBtn = modalContainer.querySelector('#settings-done-btn') as HTMLButtonElement | null;
     if (doneBtn) doneBtn.onclick = () => closeSettingsModal();
 
-    const lightBtn = modalContainer.querySelector('#theme-btn-light') as HTMLButtonElement | null;
-    const darkBtn = modalContainer.querySelector('#theme-btn-dark') as HTMLButtonElement | null;
-
-    if (lightBtn) {
-      lightBtn.onclick = () => {
-        setTheme('light');
-        if (modalContainer) {
-          modalContainer.innerHTML = renderModalContent('light');
-          attachModalEvents();
+    const themeGroup = modalContainer.querySelector('#theme-selector-group');
+    if (themeGroup) {
+      themeGroup.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('[data-theme]') as HTMLButtonElement | null;
+        if (btn?.dataset.theme) {
+          setTheme(btn.dataset.theme as Theme);
+          updateModal();
         }
-      };
-    }
-
-    if (darkBtn) {
-      darkBtn.onclick = () => {
-        setTheme('dark');
-        if (modalContainer) {
-          modalContainer.innerHTML = renderModalContent('dark');
-          attachModalEvents();
-        }
-      };
+      });
     }
 
     const refreshBtn = modalContainer.querySelector('#refresh-diagnostics-btn') as HTMLButtonElement | null;
     if (refreshBtn) {
-      refreshBtn.onclick = async () => {
-        refreshBtn.disabled = true;
-        refreshBtn.classList.add('opacity-50', 'pointer-events-none');
-        try {
-          const res = await getHealth();
-          const isHealthy = res.status === 'healthy' || res.status === 'ok';
-          setState({ backendConnected: isHealthy, healthData: res });
-        } catch {
-          setState({ backendConnected: false, healthData: null });
-        } finally {
-          if (modalContainer) {
-            modalContainer.innerHTML = renderModalContent(getState().theme);
-            attachModalEvents();
-          }
-        }
-      };
+      refreshBtn.onclick = () => refreshHealthDiagnostics(refreshBtn);
     }
   }
 
-  modalContainer.innerHTML = renderModalContent(currentTheme);
+  updateModal();
   document.body.appendChild(modalContainer);
-  attachModalEvents();
 
   // Escape key listener
   keydownListener = (e: KeyboardEvent) => {
@@ -232,22 +225,7 @@ export function openSettingsModal(): void {
   window.addEventListener('keydown', keydownListener);
 
   // Fresh background check to update modal immediately with live status
-  getHealth()
-    .then((res) => {
-      const isHealthy = res.status === 'healthy' || res.status === 'ok';
-      setState({ backendConnected: isHealthy, healthData: res });
-      if (modalContainer) {
-        modalContainer.innerHTML = renderModalContent(getState().theme);
-        attachModalEvents();
-      }
-    })
-    .catch(() => {
-      setState({ backendConnected: false, healthData: null });
-      if (modalContainer) {
-        modalContainer.innerHTML = renderModalContent(getState().theme);
-        attachModalEvents();
-      }
-    });
+  refreshHealthDiagnostics();
 }
 
 export function closeSettingsModal(): void {
@@ -260,4 +238,3 @@ export function closeSettingsModal(): void {
     modalContainer = null;
   }
 }
-

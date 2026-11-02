@@ -1,5 +1,5 @@
-from typing import Any, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class TestCaseItem(BaseModel):
@@ -8,8 +8,8 @@ class TestCaseItem(BaseModel):
 
     id: Optional[str] = None
     case_index: int
-    input: Any
-    expected_output: Optional[Any] = None
+    input: JsonValue
+    expected_output: Optional[JsonValue] = None
 
 
 class CodingProblemDetailResponse(BaseModel):

@@ -5,10 +5,11 @@
  */
 
 import { escapeHtml } from '../components/icons';
+import type { SqlCellValue, SqlRow, TableData, TestCaseData, TestCaseSqlInput } from '../types';
 
 export function formatAsciiTable(
   headers: string[],
-  rows: (Record<string, unknown> | unknown[])[]
+  rows: (SqlRow | SqlCellValue[])[]
 ): string {
   if (!headers || headers.length === 0) {
     return '(empty)';
@@ -19,11 +20,11 @@ export function formatAsciiTable(
 
   const stringRows: string[][] = rows.map((row) => {
     return headers.map((h, colIdx) => {
-      let val: unknown;
+      let val: SqlCellValue | undefined;
       if (Array.isArray(row)) {
         val = row[colIdx];
       } else if (row && typeof row === 'object') {
-        val = (row as Record<string, unknown>)[h];
+        val = row[h];
       }
       const str = val === null || val === undefined ? 'null' : String(val);
       if (str.length > colWidths[colIdx]) {
@@ -51,7 +52,7 @@ export function formatAsciiTable(
 export function formatSingleTableHtml(
   tableName: string | null,
   cols: string[],
-  rows: (Record<string, unknown> | unknown[])[] | null
+  rows: (SqlRow | SqlCellValue[])[] | null
 ): string {
   let tableHtml = `<div class="rounded-lg border border-brand-line overflow-hidden my-1.5 bg-brand-surface text-xs font-mono">`;
   if (tableName) {
@@ -68,11 +69,11 @@ export function formatSingleTableHtml(
       tableHtml += `<tr>`;
       for (let cIdx = 0; cIdx < cols.length; cIdx++) {
         const col = cols[cIdx];
-        let val: unknown;
+        let val: SqlCellValue | undefined;
         if (Array.isArray(row)) {
           val = row[cIdx];
         } else if (row && typeof row === 'object') {
-          val = (row as Record<string, unknown>)[col];
+          val = row[col];
         }
         tableHtml += `<td class="px-2.5 py-1 whitespace-nowrap">${escapeHtml(String(val ?? ''))}</td>`;
       }
@@ -86,12 +87,12 @@ export function formatSingleTableHtml(
   return tableHtml;
 }
 
-export function formatTestCaseData(val: unknown): string {
+export function formatTestCaseData(val: TestCaseData | undefined | null): string {
   if (val && typeof val === 'object') {
-    const obj = val as Record<string, unknown>;
+    const obj = val as TestCaseSqlInput;
     // Multi-table dictionary: { tables: { TableName: { columns, rows } } }
     if (obj.tables && typeof obj.tables === 'object' && !Array.isArray(obj.tables)) {
-      const tables = obj.tables as Record<string, { columns?: string[]; rows?: (Record<string, unknown> | unknown[])[] }>;
+      const tables = obj.tables as Record<string, TableData>;
       let html = '';
       for (const [tName, tData] of Object.entries(tables)) {
         if (tData && Array.isArray(tData.columns)) {
@@ -102,9 +103,9 @@ export function formatTestCaseData(val: unknown): string {
     }
     // Single table representation
     if (Array.isArray(obj.columns)) {
-      const cols = obj.columns as string[];
-      const tableName = typeof obj.table_name === 'string' ? obj.table_name : typeof obj.table === 'string' ? obj.table : null;
-      const rows = Array.isArray(obj.rows) ? (obj.rows as (Record<string, unknown> | unknown[])[]) : null;
+      const cols = obj.columns;
+      const tableName = typeof obj.table_name === 'string' ? obj.table_name : null;
+      const rows = Array.isArray(obj.rows) ? obj.rows : null;
       return formatSingleTableHtml(tableName, cols, rows);
     }
     return `<input readonly class="w-full bg-brand-surface border border-brand-line rounded-lg px-3 py-1.5 text-xs font-mono text-brand-text outline-none" value="${escapeHtml(JSON.stringify(val))}">`;

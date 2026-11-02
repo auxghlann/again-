@@ -1,10 +1,19 @@
 import json
-import os
 import subprocess
 import sys
-import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
+from pydantic import JsonValue
+
+
+class PythonSandboxResult(TypedDict):
+    passed: bool
+    status: str
+    passed_count: int
+    total_count: int
+    runtime_ms: int
+    output: str
+    error: Optional[str]
 
 HARNESS_TEMPLATE = """
 import json
@@ -103,25 +112,21 @@ if __name__ == "__main__":
 
 def run_python_sandbox(
     user_code: str,
-    test_cases: List[Dict[str, Any]],
+    test_cases: List[Dict[str, JsonValue]],
     timeout_seconds: float = 5.0,
-) -> Dict[str, Any]:
+) -> PythonSandboxResult:
     """Executes Python user code against test cases in an isolated subprocess with a timeout guard."""
-    # Write harness to temp file
+    # Format harness code
     harness_code = HARNESS_TEMPLATE.format(
         USER_CODE=user_code,
         TEST_CASES_JSON=json.dumps(test_cases),
     )
 
-    temp_path: Optional[str] = None
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tf:
-            tf.write(harness_code)
-            temp_path = tf.name
-
         start_time = time.perf_counter()
         proc = subprocess.run(
-            [sys.executable, temp_path],
+            [sys.executable, "-"],
+            input=harness_code,
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
@@ -183,9 +188,3 @@ def run_python_sandbox(
             "output": "",
             "error": str(exc),
         }
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass

@@ -1,11 +1,23 @@
 from datetime import date, datetime
 from decimal import Decimal
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from backend.db.database import DATABASE_URL
+from backend.schemas.execute import SqlCellValue, SqlRow
+
+
+class SqlSandboxResult(TypedDict):
+    passed: bool
+    status: str
+    runtime_ms: int
+    columns: Optional[List[str]]
+    rows: Optional[List[SqlRow]]
+    expected_rows: Optional[List[SqlRow]]
+    diff: Optional[str]
+    error: Optional[str]
 
 
 def check_postgres_connection() -> bool:
@@ -19,7 +31,7 @@ def check_postgres_connection() -> bool:
         return False
 
 
-def _normalize_cell(val: Any) -> Any:
+def _normalize_cell(val: object) -> SqlCellValue:
     """Normalizes cell values across Decimal, float, int, date, and string types."""
     if val is None:
         return None
@@ -35,15 +47,17 @@ def _normalize_cell(val: Any) -> Any:
             return round(float(val), 6)
         except ValueError:
             return val.strip()
-    return val
+    if isinstance(val, bool):
+        return val
+    return str(val)
 
 
 def run_sql_sandbox(
     user_sql: str,
     setup_sql: Optional[str] = None,
     canonical_sql: Optional[str] = None,
-    expected_rows: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]:
+    expected_rows: Optional[List[SqlRow]] = None,
+) -> SqlSandboxResult:
     """Executes SQL in a strict BEGIN ... ROLLBACK transaction and validates results."""
     # 1. Connect to PostgreSQL
     try:
@@ -78,7 +92,7 @@ def run_sql_sandbox(
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
         # Retrieve columns & rows if query returns data
-        user_rows: List[Dict[str, Any]] = []
+        user_rows: List[SqlRow] = []
         user_cols: List[str] = []
         if cur.description:
             user_cols = [desc[0] for desc in cur.description]
@@ -96,7 +110,7 @@ def run_sql_sandbox(
         if exp_rows is not None:
             # Normalize for comparison
             normalized_user = [
-                {str(k).lower(): _normalize_cell(v) for k, v in row.items()}
+                {k.lower(): _normalize_cell(v) for k, v in row.items()}
                 for row in user_rows
             ]
             normalized_exp = [
@@ -136,17 +150,6 @@ def run_sql_sandbox(
             "error": None,
         }
 
-    except psycopg2.Error as err:
-        return {
-            "passed": False,
-            "status": "Runtime Error",
-            "runtime_ms": 0,
-            "columns": None,
-            "rows": None,
-            "expected_rows": expected_rows,
-            "diff": None,
-            "error": str(err).strip(),
-        }
     except Exception as exc:
         return {
             "passed": False,
