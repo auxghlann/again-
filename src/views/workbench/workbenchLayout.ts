@@ -87,12 +87,9 @@ export function renderWorkbenchLayout(props: WorkbenchLayoutProps): string {
             </div>
 
             <!-- Editor Body -->
-            <div class="ed flex-1 min-h-0 relative flex overflow-hidden font-mono text-xs">
-              <div class="gut shrink-0 select-none py-3 px-2.5 text-right font-mono text-xs leading-relaxed whitespace-pre min-w-[2.5rem] text-[#4a5873] border-r border-[#1b2740] bg-[#081120] overflow-hidden" id="code-gutter" aria-hidden="true"></div>
-              <div class="code flex-1 relative overflow-hidden">
-                <pre id="code-highlight" class="absolute inset-0 p-3 m-0 overflow-hidden pointer-events-none font-mono text-xs leading-relaxed text-[#e6ecf5]" aria-hidden="true"></pre>
-                <textarea id="code-textarea" class="absolute inset-0 p-3 m-0 w-full h-full bg-transparent resize-none border-0 outline-none font-mono text-xs leading-relaxed caret-emerald-400 scrollbar-thin" style="-webkit-text-fill-color: transparent !important; color: transparent !important;" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
-              </div>
+            <div class="ed flex-1 min-h-0 relative flex overflow-hidden font-mono text-xs" id="code-editor-mount">
+              <div class="code flex-1 relative overflow-hidden h-full w-full z-10" id="editor-mount"></div>
+              <textarea id="code-textarea" class="absolute bottom-0 right-0 w-4 h-4 bg-transparent border-0 outline-none resize-none z-0 text-transparent opacity-[0.01]" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
             </div>
 
             <!-- Editor Bottom Status Bar -->

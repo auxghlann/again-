@@ -13,7 +13,7 @@ import {
 import { attachShellEvents, renderShell } from '../components/shell';
 import { escapeHtml } from '../components/icons';
 import { showToast } from '../components/toast';
-import { bindCodeEditor } from '../editor/editor';
+import { bindCodeEditor, type EditorController } from '../editor/editor';
 import { navigate } from '../router';
 import { setState } from '../state';
 import type {
@@ -165,9 +165,8 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   setupBentoResizers(container);
 
   // Grab interactive elements
+  const editorMount = container.querySelector('#editor-mount') as HTMLElement | null;
   const textarea = container.querySelector('#code-textarea') as HTMLTextAreaElement | null;
-  const highlightEl = container.querySelector('#code-highlight') as HTMLElement | null;
-  const gutterEl = container.querySelector('#code-gutter') as HTMLElement | null;
   const cursorPosEl = container.querySelector('#editor-cursor-pos') as HTMLElement | null;
   const consoleBody = container.querySelector('#console-card-body') as HTMLElement | null;
   const consoleHeader = container.querySelector('#console-header-container') as HTMLElement | null;
@@ -237,32 +236,28 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
     }
   }
 
-  function updateCursorPos(): void {
-    if (!cursorPosEl || !textarea) return;
-    const textBefore = textarea.value.substring(0, textarea.selectionStart);
-    const lines = textBefore.split('\n');
-    const curLine = lines.length;
-    const curCol = lines[lines.length - 1].length + 1;
-    cursorPosEl.textContent = `Ln ${curLine}, Col ${curCol}`;
-  }
-
-  // Wire up code editor
-  if (textarea && highlightEl && gutterEl) {
+  // Wire up CodeMirror 6 editor
+  let editorController: EditorController | null = null;
+  if (editorMount && textarea) {
     textarea.value = userCode;
-    bindCodeEditor(textarea, highlightEl, gutterEl, kind, (updated) => {
-      userCode = updated;
-      try {
-        localStorage.setItem(localCodeKey, updated);
-      } catch {
-        // ignore
+    editorController = bindCodeEditor(
+      editorMount,
+      textarea,
+      kind,
+      (updated) => {
+        userCode = updated;
+        try {
+          localStorage.setItem(localCodeKey, updated);
+        } catch {
+          // ignore
+        }
+      },
+      (line, col) => {
+        if (cursorPosEl) {
+          cursorPosEl.textContent = `Ln ${line}, Col ${col}`;
+        }
       }
-      updateCursorPos();
-    });
-
-    textarea.addEventListener('keyup', updateCursorPos);
-    textarea.addEventListener('click', updateCursorPos);
-    textarea.addEventListener('input', updateCursorPos);
-    updateCursorPos();
+    );
   }
 
   function updateLeftPanel(): void {
@@ -365,7 +360,11 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   if (resetBtn && textarea) {
     resetBtn.onclick = () => {
       if (confirm('Reset code to starter template?')) {
-        textarea.value = starter;
+        if (editorController) {
+          editorController.setValue(starter);
+        } else {
+          textarea.value = starter;
+        }
         userCode = starter;
         textarea.dispatchEvent(new Event('input'));
         showToast('Code reset to starter template.');
@@ -376,8 +375,15 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
   const formatBtn = container.querySelector('#editor-format-btn') as HTMLButtonElement | null;
   if (formatBtn && textarea) {
     formatBtn.onclick = () => {
-      const lines = textarea.value.split('\n').map((l) => l.trimEnd());
-      textarea.value = lines.join('\n');
+      const codeVal = editorController ? editorController.getValue() : textarea.value;
+      const lines = codeVal.split('\n').map((l) => l.trimEnd());
+      const formatted = lines.join('\n');
+      if (editorController) {
+        editorController.setValue(formatted);
+      } else {
+        textarea.value = formatted;
+      }
+      userCode = formatted;
       textarea.dispatchEvent(new Event('input'));
       showToast('Formatted whitespace.');
     };
@@ -394,6 +400,9 @@ export async function renderProblemView(container: HTMLElement, problemId: strin
 
   // Execute Code Logic
   async function executeCode(isSubmission: boolean): Promise<void> {
+    if (editorController) {
+      userCode = editorController.getValue();
+    }
     if (isSubmission) {
       pendingSubmittedCode = userCode;
       currentLeftTab = 'pending';
