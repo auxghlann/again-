@@ -1,167 +1,182 @@
-import { highlight } from './syntax';
+import { EditorView, keymap } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { basicSetup } from 'codemirror';
+import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { sql, PostgreSQL } from '@codemirror/lang-sql';
+import { python } from '@codemirror/lang-python';
+import { indentUnit, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 
 export interface EditorController {
   getValue: () => string;
   setValue: (value: string) => void;
-  sync: () => void;
+  focus: () => void;
+  destroy: () => void;
+  getView: () => EditorView;
 }
 
+const againTheme = EditorView.theme({
+  '&': {
+    height: '100%',
+    width: '100%',
+    backgroundColor: '#081120',
+    color: '#e6ecf5',
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    fontSize: '12px',
+  },
+  '.cm-scroller': {
+    overflow: 'auto',
+    fontFamily: 'inherit',
+    lineHeight: '1.6',
+  },
+  '.cm-content': {
+    caretColor: '#34d399',
+    lineHeight: '1.6',
+    padding: '12px 4px',
+  },
+  '&.cm-focused .cm-cursor': {
+    borderLeftColor: '#34d399',
+    borderLeftWidth: '2px',
+  },
+  '&.cm-focused .cm-selectionBackground, ::selection': {
+    backgroundColor: '#1d3557 !important',
+  },
+  '.cm-selectionMatch': {
+    backgroundColor: '#1e3a5f',
+  },
+  '.cm-gutters': {
+    backgroundColor: '#081120',
+    color: '#4a5873',
+    borderRight: '1px solid #1b2740',
+    paddingRight: '6px',
+    lineHeight: '1.6',
+  },
+  '.cm-gutterElement': {
+    padding: '0 8px',
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    color: '#8d9bb3',
+  },
+  '.cm-tooltip': {
+    backgroundColor: '#0c1626',
+    border: '1px solid #25314a',
+    color: '#e6ecf5',
+    borderRadius: '6px',
+  },
+  '.cm-tooltip-autocomplete': {
+    '& > ul > li[aria-selected]': {
+      backgroundColor: '#182234',
+      color: '#ffffff',
+    },
+  },
+});
+
+const againHighlightStyle = HighlightStyle.define([
+  { tag: t.keyword, color: '#c792ea', fontWeight: 'bold' },
+  { tag: [t.name, t.deleted, t.character, t.propertyName, t.macroName], color: '#e6ecf5' },
+  { tag: [t.function(t.variableName), t.labelName], color: '#82aaff' },
+  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: '#7fdbca' },
+  { tag: [t.definition(t.name), t.separator], color: '#e6ecf5' },
+  { tag: [t.typeName, t.className, t.number, t.changed, t.annotation, t.modifier, t.self, t.namespace], color: '#f78c6c' },
+  { tag: [t.operator, t.operatorKeyword, t.url, t.escape, t.regexp, t.link, t.special(t.string)], color: '#c792ea' },
+  { tag: [t.meta, t.comment], color: '#5f7089', fontStyle: 'italic' },
+  { tag: t.strong, fontWeight: 'bold' },
+  { tag: t.emphasis, fontStyle: 'italic' },
+  { tag: t.strikethrough, textDecoration: 'line-through' },
+  { tag: t.link, color: '#82aaff', textDecoration: 'underline' },
+  { tag: t.heading, fontWeight: 'bold', color: '#c792ea' },
+  { tag: [t.atom, t.bool, t.special(t.variableName)], color: '#f78c6c' },
+  { tag: [t.processingInstruction, t.string, t.inserted], color: '#a5e075' },
+  { tag: t.invalid, color: '#ff5370' },
+]);
+
 export function bindCodeEditor(
+  mountContainer: HTMLElement,
   textarea: HTMLTextAreaElement,
-  preHighlight: HTMLElement,
-  gutter: HTMLElement,
   kind: 'sql' | 'py',
-  onInput?: (val: string) => void
+  onInput?: (val: string) => void,
+  onCursorChange?: (line: number, col: number) => void
 ): EditorController {
-  let isTrapActive = true;
+  const langExtension = kind === 'sql' ? sql({ dialect: PostgreSQL }) : python();
 
-  const sync = () => {
-    const code = textarea.value;
-    preHighlight.innerHTML = highlight(code, kind) + '\n';
-    const lines = code.split('\n').length;
-    gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
+  let isUpdatingFromTextarea = false;
+
+  const updateListener = EditorView.updateListener.of((update) => {
+    if (update.docChanged && !isUpdatingFromTextarea) {
+      const code = update.state.doc.toString();
+      textarea.value = code;
+      if (onInput) {
+        onInput(code);
+      }
+    }
+    if (update.selectionSet || update.docChanged) {
+      if (onCursorChange) {
+        const pos = update.state.selection.main.head;
+        const line = update.state.doc.lineAt(pos);
+        onCursorChange(line.number, pos - line.from + 1);
+      }
+    }
+  });
+
+  const state = EditorState.create({
+    doc: textarea.value,
+    extensions: [
+      basicSetup,
+      keymap.of([indentWithTab, ...defaultKeymap]),
+      indentUnit.of('    '),
+      langExtension,
+      againTheme,
+      syntaxHighlighting(againHighlightStyle),
+      updateListener,
+    ],
+  });
+
+  const view = new EditorView({
+    state,
+    parent: mountContainer,
+  });
+
+  // Listen for external programmatic textarea inputs (e.g. from tests or reset button)
+  const handleTextareaInput = () => {
+    const currentDoc = view.state.doc.toString();
+    if (currentDoc !== textarea.value) {
+      isUpdatingFromTextarea = true;
+      view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: textarea.value },
+      });
+      isUpdatingFromTextarea = false;
+      if (onInput) {
+        onInput(textarea.value);
+      }
+    }
   };
 
-  textarea.addEventListener('input', () => {
-    sync();
-    if (onInput) {
-      onInput(textarea.value);
-    }
-  });
-
-  textarea.addEventListener('scroll', () => {
-    preHighlight.scrollTop = textarea.scrollTop;
-    preHighlight.scrollLeft = textarea.scrollLeft;
-    gutter.scrollTop = textarea.scrollTop;
-  });
-
-  textarea.addEventListener('focus', () => {
-    isTrapActive = true;
-  });
-
-  const pairs: Record<string, string> = {
-    '(': ')',
-    '[': ']',
-    '{': '}',
-    "'": "'",
-    '"': '"',
-    '`': '`',
-  };
-  const closeChars = new Set([')', ']', '}', "'", '"', '`']);
-
-  textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      isTrapActive = false;
-      return;
-    }
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const value = textarea.value;
-
-    // 1. Tab and Shift+Tab indentation
-    if (e.key === 'Tab' && isTrapActive) {
-      e.preventDefault();
-      if (!e.shiftKey) {
-        if (start === end) {
-          textarea.setRangeText('    ', start, end, 'end');
-        } else {
-          const before = value.substring(0, start);
-          const lineStart = before.lastIndexOf('\n') + 1;
-          const after = value.substring(end);
-          const selectedText = value.substring(lineStart, end);
-          const indented = selectedText.split('\n').map((l) => '    ' + l).join('\n');
-          textarea.value = value.substring(0, lineStart) + indented + after;
-          textarea.selectionStart = start + 4;
-          textarea.selectionEnd = lineStart + indented.length;
-        }
-      } else {
-        const before = value.substring(0, start);
-        const lineStart = before.lastIndexOf('\n') + 1;
-        const after = value.substring(end);
-        const selectedText = value.substring(lineStart, end);
-        const outdented = selectedText
-          .split('\n')
-          .map((l) => l.replace(/^ {1,4}/, ''))
-          .join('\n');
-        textarea.value = value.substring(0, lineStart) + outdented + after;
-        textarea.selectionStart = Math.max(lineStart, start - 4);
-        textarea.selectionEnd = lineStart + outdented.length;
-      }
-      textarea.dispatchEvent(new Event('input'));
-      return;
-    }
-
-    // 2. Auto-indent on Enter
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-      const currentLine = value.substring(lineStart, start);
-      const match = currentLine.match(/^[ \t]+/);
-      const indent = match ? match[0] : '';
-      
-      textarea.setRangeText('\n' + indent, start, end, 'end');
-      textarea.dispatchEvent(new Event('input'));
-      return;
-    }
-
-    // 3. Pair-aware backspace
-    if (e.key === 'Backspace' && start === end && start > 0) {
-      const charBefore = value[start - 1];
-      const charAfter = value[start];
-      if (pairs[charBefore] && pairs[charBefore] === charAfter) {
-        e.preventDefault();
-        textarea.setRangeText('', start - 1, start + 1, 'end');
-        textarea.dispatchEvent(new Event('input'));
-        return;
-      }
-    }
-
-    // 4. Auto-closing pairs and selection wrapping
-    if (pairs[e.key]) {
-      const open = e.key;
-      const close = pairs[open];
-      if (start !== end) {
-        e.preventDefault();
-        const selectedText = value.substring(start, end);
-        textarea.setRangeText(open + selectedText + close, start, end, 'end');
-        textarea.selectionStart = start + 1;
-        textarea.selectionEnd = end + 1;
-        textarea.dispatchEvent(new Event('input'));
-        return;
-      } else {
-        if (open === close && value[start] === close) {
-          e.preventDefault();
-          textarea.selectionStart = start + 1;
-          textarea.selectionEnd = start + 1;
-          return;
-        }
-        e.preventDefault();
-        textarea.setRangeText(open + close, start, end, 'end');
-        textarea.selectionStart = start + 1;
-        textarea.selectionEnd = start + 1;
-        textarea.dispatchEvent(new Event('input'));
-        return;
-      }
-    }
-
-    // 5. Skip over closing bracket/paren if typed before it
-    if (closeChars.has(e.key) && start === end && value[start] === e.key) {
-      e.preventDefault();
-      textarea.selectionStart = start + 1;
-      textarea.selectionEnd = start + 1;
-      return;
-    }
-  });
-
-  sync();
+  textarea.addEventListener('input', handleTextareaInput);
 
   return {
-    getValue: () => textarea.value,
+    getValue: () => view.state.doc.toString(),
     setValue: (val: string) => {
+      isUpdatingFromTextarea = true;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: val },
+      });
       textarea.value = val;
-      sync();
+      isUpdatingFromTextarea = false;
+      if (onInput) {
+        onInput(val);
+      }
     },
-    sync,
+    focus: () => {
+      view.focus();
+    },
+    destroy: () => {
+      textarea.removeEventListener('input', handleTextareaInput);
+      view.destroy();
+    },
+    getView: () => view,
   };
 }

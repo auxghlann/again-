@@ -23,5 +23,10 @@
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.71.2",
     "vite": "^6.2.0"
+  },
+  "dependencies": {
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-sql": "^6.10.0",
+    "codemirror": "^6.0.2"
   }
 }

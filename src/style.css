@@ -92,13 +92,11 @@ body {
   outline-offset: 2px;
 }
 
-/* ---------- Code Editor Syntax Highlighting ---------- */
-.code .k { color: #c792ea; }
-.code .s { color: #a5e075; }
-.code .n { color: #f78c6c; }
-.code .c { color: #5f7089; font-style: italic; }
-.code .f { color: #82aaff; }
-.code .b { color: #7fdbca; }
+/* ---------- CodeMirror Editor Styles ---------- */
+.cm-editor {
+  height: 100%;
+  width: 100%;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {
